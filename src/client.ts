@@ -1,4 +1,4 @@
-import { WebSocketClient } from "./socket";
+import { WebSocketClient, WebSocketInterface } from "./socket";
 
 import {
   BasicCredentials,
@@ -25,9 +25,7 @@ import { ManagerFeature } from "./features/manager";
 import { MonitoringFeature } from "./features/monitoring";
 
 interface FetchOptions extends RequestInit {
-  headers?: {
-    [key: string]: string;
-  };
+  headers?: { [key: string]: string };
 }
 
 export class ComfyApi extends EventTarget {
@@ -44,6 +42,7 @@ export class ComfyApi extends EventTarget {
   private apiBase: string;
   private clientId: string | null;
   private socket: WebSocketClient | null = null;
+  private customWsImpl: WebSocketInterface | null = null;
   private listeners: {
     event: keyof TComfyAPIEventMap;
     options?: AddEventListenerOptions | boolean;
@@ -111,10 +110,7 @@ export class ComfyApi extends EventTarget {
    */
   get availableFeatures() {
     return Object.keys(this.ext).reduce(
-      (acc, key) => ({
-        ...acc,
-        [key]: this.ext[key as keyof typeof this.ext].isSupported
-      }),
+      (acc, key) => ({ ...acc, [key]: this.ext[key as keyof typeof this.ext].isSupported }),
       {}
     );
   }
@@ -137,6 +133,10 @@ export class ComfyApi extends EventTarget {
        * Listen to terminal logs from the server. Default (false)
        */
       listenTerminal?: boolean;
+      /**
+       * Custom WebSocket implementation.
+       */
+      customWebSocketImpl?: WebSocketInterface;
       credentials?: BasicCredentials | BearerTokenCredentials | CustomCredentials;
     }
   ) {
@@ -154,11 +154,10 @@ export class ComfyApi extends EventTarget {
     if (opts?.listenTerminal) {
       this.listenTerminal = opts.listenTerminal;
     }
-    this.log("constructor", "Initialized", {
-      host,
-      clientId,
-      opts
-    });
+    if (opts?.customWebSocketImpl) {
+      this.customWsImpl = opts.customWebSocketImpl;
+    }
+    this.log("constructor", "Initialized", { host, clientId, opts });
     return this;
   }
 
@@ -202,13 +201,9 @@ export class ComfyApi extends EventTarget {
     if (!this.credentials) return {};
     switch (this.credentials?.type) {
       case "basic":
-        return {
-          Authorization: `Basic ${btoa(`${this.credentials.username}:${this.credentials.password}`)}`
-        };
+        return { Authorization: `Basic ${btoa(`${this.credentials.username}:${this.credentials.password}`)}` };
       case "bearer_token":
-        return {
-          Authorization: `Bearer ${this.credentials.token}`
-        };
+        return { Authorization: `Bearer ${this.credentials.token}` };
       case "custom":
         return this.credentials.headers;
       default:
@@ -255,9 +250,7 @@ export class ComfyApi extends EventTarget {
     if (!options) {
       options = {};
     }
-    options.headers = {
-      ...this.getCredentialHeaders()
-    };
+    options.headers = { ...this.getCredentialHeaders() };
     options.mode = "cors";
     return fetch(this.apiURL(route), options);
   }
@@ -270,9 +263,7 @@ export class ComfyApi extends EventTarget {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     try {
-      const response = await this.fetchApi("/prompt", {
-        signal: controller.signal
-      });
+      const response = await this.fetchApi("/prompt", { signal: controller.signal });
       if (response.status === 200) {
         return response.json();
       } else {
@@ -296,10 +287,7 @@ export class ComfyApi extends EventTarget {
    * @returns {Promise<QueuePromptResponse>} The response from the API.
    */
   async queuePrompt(number: number | null, workflow: object): Promise<QueuePromptResponse> {
-    const body = {
-      client_id: this.clientId,
-      prompt: workflow
-    } as any;
+    const body = { client_id: this.clientId, prompt: workflow } as any;
 
     if (number !== null) {
       if (number === -1) {
@@ -312,16 +300,12 @@ export class ComfyApi extends EventTarget {
     try {
       const response = await this.fetchApi("/prompt", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
 
       if (response.status !== 200) {
-        throw {
-          response
-        };
+        throw { response };
       }
 
       return response.json();
@@ -386,10 +370,7 @@ export class ComfyApi extends EventTarget {
   /**
    * Retrieves the terminal logs from the server.
    */
-  async getTerminalLogs(): Promise<{
-    entries: Array<{ t: string; m: string }>;
-    size: { cols: number; rows: number };
-  }> {
+  async getTerminalLogs(): Promise<{ entries: Array<{ t: string; m: string }>; size: { cols: number; rows: number } }> {
     const response = await this.fetchApi("/internal/logs/raw");
     return response.json();
   }
@@ -404,13 +385,8 @@ export class ComfyApi extends EventTarget {
     // Send the request to the server
     await this.fetchApi("/internal/logs/subscribe", {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        clientId: this.clientId,
-        enabled: subscribe
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId: this.clientId, enabled: subscribe })
     });
   }
 
@@ -499,9 +475,7 @@ export class ComfyApi extends EventTarget {
   async createUser(username: string): Promise<Response> {
     const response = await this.fetchApi("/users", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username })
     });
     return response;
@@ -534,9 +508,7 @@ export class ComfyApi extends EventTarget {
   async storeSettings(settings: Record<string, unknown>): Promise<void> {
     await this.fetchApi(`/settings`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings)
     });
   }
@@ -550,9 +522,7 @@ export class ComfyApi extends EventTarget {
   async storeSetting(id: string, value: unknown): Promise<void> {
     await this.fetchApi(`/settings/${encodeURIComponent(id)}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(value)
     });
   }
@@ -568,25 +538,19 @@ export class ComfyApi extends EventTarget {
   async uploadImage(
     file: Buffer | Blob,
     fileName: string,
-    config?: {
-      override?: boolean;
-      subfolder?: string;
-    }
+    config?: { override?: boolean; subfolder?: string }
   ): Promise<{ info: ImageInfo; url: string } | false> {
     const formData = new FormData();
     if (file instanceof Buffer) {
-      formData.append("image", new Blob([file]), fileName);
+      formData.append("image", new Blob([file as BlobPart]), fileName);
     } else {
-      formData.append("image", file, fileName);
+      formData.append("image", file as Blob, fileName);
     }
     formData.append("subfolder", config?.subfolder ?? "");
     formData.append("overwrite", config?.override?.toString() ?? "false");
 
     try {
-      const response = await this.fetchApi("/upload/image", {
-        method: "POST",
-        body: formData
-      });
+      const response = await this.fetchApi("/upload/image", { method: "POST", body: formData });
       const imgInfo = await response.json();
       const mapped = { ...imgInfo, filename: imgInfo.name };
 
@@ -596,10 +560,7 @@ export class ComfyApi extends EventTarget {
         return false;
       }
 
-      return {
-        info: mapped,
-        url: this.getPathImage(mapped)
-      };
+      return { info: mapped, url: this.getPathImage(mapped) };
     } catch (e) {
       this.log("uploadImage", "Upload failed", e);
       return false;
@@ -618,9 +579,9 @@ export class ComfyApi extends EventTarget {
 
     // Append the image file to the form data
     if (file instanceof Buffer) {
-      formData.append("image", new Blob([file]), "mask.png");
+      formData.append("image", new Blob([file as BlobPart]), "mask.png");
     } else {
-      formData.append("image", file, "mask.png");
+      formData.append("image", file as Blob, "mask.png");
     }
 
     // Append the original reference as a JSON string
@@ -628,10 +589,7 @@ export class ComfyApi extends EventTarget {
 
     try {
       // Send the POST request to the /upload/mask endpoint
-      const response = await this.fetchApi("/upload/mask", {
-        method: "POST",
-        body: formData
-      });
+      const response = await this.fetchApi("/upload/mask", { method: "POST", body: formData });
 
       // Check if the response is successful
       if (!response.ok) {
@@ -641,10 +599,7 @@ export class ComfyApi extends EventTarget {
 
       const imgInfo = await response.json();
       const mapped = { ...imgInfo, filename: imgInfo.name };
-      return {
-        info: mapped,
-        url: this.getPathImage(mapped)
-      };
+      return { info: mapped, url: this.getPathImage(mapped) };
     } catch (error) {
       this.log("uploadMask", "Upload failed", error);
       return false;
@@ -659,17 +614,12 @@ export class ComfyApi extends EventTarget {
    * @returns A promise that resolves to a boolean indicating whether the memory was successfully freed.
    */
   async freeMemory(unloadModels: boolean, freeMemory: boolean): Promise<boolean> {
-    const payload = {
-      unload_models: unloadModels,
-      free_memory: freeMemory
-    };
+    const payload = { unload_models: unloadModels, free_memory: freeMemory };
 
     try {
       const response = await this.fetchApi("/free", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
@@ -726,17 +676,15 @@ export class ComfyApi extends EventTarget {
   async storeUserData(
     file: string,
     data: unknown,
-    options: RequestInit & {
-      overwrite?: boolean;
-      stringify?: boolean;
-      throwOnError?: boolean;
-    } = { overwrite: true, stringify: true, throwOnError: true }
+    options: RequestInit & { overwrite?: boolean; stringify?: boolean; throwOnError?: boolean } = {
+      overwrite: true,
+      stringify: true,
+      throwOnError: true
+    }
   ): Promise<Response> {
     const response = await this.fetchApi(`/userdata/${encodeURIComponent(file)}?overwrite=${options.overwrite}`, {
       method: "POST",
-      headers: {
-        "Content-Type": options.stringify ? "application/json" : "application/octet-stream"
-      } as any,
+      headers: { "Content-Type": options.stringify ? "application/json" : "application/octet-stream" } as any,
       body: options.stringify ? JSON.stringify(data) : (data as any),
       ...options
     });
@@ -755,9 +703,7 @@ export class ComfyApi extends EventTarget {
    * @returns {Promise<void>}
    */
   async deleteUserData(file: string): Promise<void> {
-    const response = await this.fetchApi(`/userdata/${encodeURIComponent(file)}`, {
-      method: "DELETE"
-    });
+    const response = await this.fetchApi(`/userdata/${encodeURIComponent(file)}`, { method: "DELETE" });
 
     if (response.status !== 204) {
       this.log("deleteUserData", "Error deleting user data file", response);
@@ -779,9 +725,7 @@ export class ComfyApi extends EventTarget {
   ): Promise<Response> {
     return this.fetchApi(
       `/userdata/${encodeURIComponent(source)}/move/${encodeURIComponent(dest)}?overwrite=${options.overwrite}`,
-      {
-        method: "POST"
-      }
+      { method: "POST" }
     );
   }
 
@@ -794,11 +738,7 @@ export class ComfyApi extends EventTarget {
    */
   async listUserData(dir: string, recurse?: boolean, split?: boolean): Promise<string[]> {
     const response = await this.fetchApi(
-      `/userdata?${new URLSearchParams({
-        dir,
-        recurse: recurse?.toString() ?? "",
-        split: split?.toString() ?? ""
-      })}`
+      `/userdata?${new URLSearchParams({ dir, recurse: recurse?.toString() ?? "", split: split?.toString() ?? "" })}`
     );
 
     if (response.status === 404) return [];
@@ -815,9 +755,7 @@ export class ComfyApi extends EventTarget {
    * @returns {Promise<void>}
    */
   async interrupt(): Promise<void> {
-    await this.fetchApi("/interrupt", {
-      method: "POST"
-    });
+    await this.fetchApi("/interrupt", { method: "POST" });
   }
 
   /**
@@ -912,7 +850,7 @@ export class ComfyApi extends EventTarget {
     const BASE_DELAY = 1000;
     // Maximum delay between attempts (15 seconds)
     const MAX_DELAY = 15000;
-    
+
     let attempt = 0;
 
     const tryReconnect = () => {
@@ -922,16 +860,12 @@ export class ComfyApi extends EventTarget {
       // Clean up any existing socket
       if (this.socket?.client) {
         try {
-          // Only call terminate if it exists (Node.js environment)
-          if (typeof this.socket.client.terminate === 'function') {
-            this.socket.client.terminate();
-          }
           this.socket.close();
         } catch (error) {
           this.log("socket", "Error while closing previous socket", error);
         }
       }
-      
+
       this.socket = null;
 
       // Create new socket connection
@@ -944,22 +878,20 @@ export class ComfyApi extends EventTarget {
       // Calculate next retry delay with exponential backoff and jitter
       if (attempt < MAX_ATTEMPTS) {
         // Exponential backoff formula: baseDelay * 2^attempt + random jitter
-        const exponentialDelay = Math.min(
-          BASE_DELAY * Math.pow(2, attempt - 1),
-          MAX_DELAY
-        );
-        
+        const exponentialDelay = Math.min(BASE_DELAY * Math.pow(2, attempt - 1), MAX_DELAY);
+
         // Add jitter (±30% of the delay) to prevent all clients reconnecting simultaneously
         const jitter = exponentialDelay * 0.3 * (Math.random() - 0.5);
         const delay = Math.max(1000, exponentialDelay + jitter);
-        
+
         this.log("socket", `Will retry in ${Math.round(delay / 1000)} seconds`);
 
         // Check if the socket is reconnected within the timeout
         setTimeout(() => {
-          if (!this.socket?.client ||
-             (this.socket.client.readyState !== WebSocket.OPEN &&
-              this.socket.client.readyState !== WebSocket.CONNECTING)) {
+          if (
+            !this.socket?.client ||
+            (this.socket.client.readyState !== WebSocket.OPEN && this.socket.client.readyState !== WebSocket.CONNECTING)
+          ) {
             this.log("socket", "Reconnection failed or timed out, retrying...");
             tryReconnect(); // Retry if not connected
           } else {
@@ -991,30 +923,28 @@ export class ComfyApi extends EventTarget {
   private createSocket(isReconnect: boolean = false) {
     let reconnecting = false;
     let usePolling = false;
-    
+
     if (this.socket) {
       this.log("socket", "Socket already exists, skipping creation.");
       return;
     }
-    
-    const headers = {
-      ...this.getCredentialHeaders()
-    };
-    
+
+    const headers = { ...this.getCredentialHeaders() };
+
     const existingSession = `?clientId=${this.clientId}`;
     const wsUrl = `ws${this.apiHost.includes("https:") ? "s" : ""}://${this.apiBase}/ws${existingSession}`;
-    
+
     // Try to create WebSocket connection
     try {
-      this.socket = new WebSocketClient(wsUrl, { headers });
-      
+      this.socket = new WebSocketClient(wsUrl, { headers, customWebSocketImpl: this.customWsImpl });
+
       this.socket.client.onclose = () => {
         if (reconnecting || isReconnect) return;
         reconnecting = true;
         this.log("socket", "Socket closed -> Reconnecting");
         this.reconnectWs(true);
       };
-      
+
       this.socket.client.onopen = () => {
         this.resetLastActivity();
         reconnecting = false;
@@ -1031,63 +961,61 @@ export class ComfyApi extends EventTarget {
       this.socket = null;
       usePolling = true;
       this.dispatchEvent(new CustomEvent("websocket_unavailable", { detail: error }));
-      
+
       // Set up polling mechanism
       this.setupPollingFallback();
     }
-    
+
     // Only continue with WebSocket setup if creation was successful
     if (this.socket?.client) {
-    this.socket.client.onmessage = (event) => {
-      this.resetLastActivity();
-      try {
-        if (event.data instanceof Buffer) {
-          const buffer = event.data;
-          const view = new DataView(buffer.buffer);
-          const eventType = view.getUint32(0);
-          switch (eventType) {
-            case 1:
-              const imageType = view.getUint32(0);
-              let imageMime;
-              switch (imageType) {
-                case 1:
-                default:
-                  imageMime = "image/jpeg";
-                  break;
-                case 2:
-                  imageMime = "image/png";
-              }
-              const imageBlob = new Blob([buffer.slice(8)], {
-                type: imageMime
-              });
-              this.dispatchEvent(new CustomEvent("b_preview", { detail: imageBlob }));
-              break;
-            default:
-              throw new Error(`Unknown binary websocket message of type ${eventType}`);
-          }
-        } else if (typeof event.data === "string") {
-          const msg = JSON.parse(event.data);
-          if (!msg.data || !msg.type) return;
-          this.dispatchEvent(new CustomEvent("all", { detail: msg }));
-          if (msg.type === "logs") {
-            this.dispatchEvent(new CustomEvent("terminal", { detail: msg.data.entries?.[0] || null }));
+      this.socket.client.onmessage = (event) => {
+        this.resetLastActivity();
+        try {
+          if (event.data instanceof Buffer) {
+            const buffer = event.data;
+            const view = new DataView(buffer.buffer);
+            const eventType = view.getUint32(0);
+            switch (eventType) {
+              case 1:
+                const imageType = view.getUint32(0);
+                let imageMime;
+                switch (imageType) {
+                  case 1:
+                  default:
+                    imageMime = "image/jpeg";
+                    break;
+                  case 2:
+                    imageMime = "image/png";
+                }
+                const imageBlob = new Blob([buffer.slice(8)], { type: imageMime });
+                this.dispatchEvent(new CustomEvent("b_preview", { detail: imageBlob }));
+                break;
+              default:
+                throw new Error(`Unknown binary websocket message of type ${eventType}`);
+            }
+          } else if (typeof event.data === "string") {
+            const msg = JSON.parse(event.data);
+            if (!msg.data || !msg.type) return;
+            this.dispatchEvent(new CustomEvent("all", { detail: msg }));
+            if (msg.type === "logs") {
+              this.dispatchEvent(new CustomEvent("terminal", { detail: msg.data.entries?.[0] || null }));
+            } else {
+              this.dispatchEvent(new CustomEvent(msg.type, { detail: msg.data }));
+            }
+            if (msg.data.sid) {
+              this.clientId = msg.data.sid;
+            }
           } else {
-            this.dispatchEvent(new CustomEvent(msg.type, { detail: msg.data }));
+            this.log("socket", "Unhandled message", event);
           }
-          if (msg.data.sid) {
-            this.clientId = msg.data.sid;
-          }
-        } else {
-          this.log("socket", "Unhandled message", event);
+        } catch (error) {
+          this.log("socket", "Unhandled message", { event, error });
         }
-      } catch (error) {
-        this.log("socket", "Unhandled message", { event, error });
-      }
-    };
+      };
 
       this.socket.client.onerror = (e) => {
         this.log("socket", "Socket error", e);
-        
+
         // If this is the first error and we're not already in reconnect mode
         if (!reconnecting && !usePolling) {
           usePolling = true;
@@ -1095,7 +1023,7 @@ export class ComfyApi extends EventTarget {
           this.setupPollingFallback();
         }
       };
-      
+
       if (!isReconnect) {
         this.wsTimer = setInterval(() => {
           if (reconnecting) return;
@@ -1108,7 +1036,7 @@ export class ComfyApi extends EventTarget {
       }
     }
   }
-  
+
   /**
    * Sets up a polling mechanism as a fallback when WebSockets are unavailable
    * Polls the server every 2 seconds for status updates
@@ -1119,7 +1047,7 @@ export class ComfyApi extends EventTarget {
    */
   private setupPollingFallback() {
     this.log("socket", "Setting up polling fallback mechanism");
-    
+
     // Clear any existing polling timer
     if (this._pollingTimer) {
       try {
@@ -1129,21 +1057,21 @@ export class ComfyApi extends EventTarget {
         this.log("socket", "Error clearing polling timer", e);
       }
     }
-    
+
     // Poll every 2 seconds
     const POLLING_INTERVAL = 2000;
-    
+
     const pollFn = async () => {
       try {
         // Poll execution status
         const status = await this.pollStatus();
-        
+
         // Simulate an event dispatch similar to WebSocket
         this.dispatchEvent(new CustomEvent("status", { detail: status }));
-        
+
         // Reset activity timestamp to prevent timeout
         this.resetLastActivity();
-        
+
         // Try to re-establish WebSocket connection periodically
         if (!this.socket || !this.socket.client || this.socket.client.readyState !== WebSocket.OPEN) {
           this.log("socket", "Attempting to restore WebSocket connection");
@@ -1165,10 +1093,10 @@ export class ComfyApi extends EventTarget {
         this.log("socket", "Polling error", error);
       }
     };
-    
+
     // Using setInterval and casting to the expected type
     this._pollingTimer = setInterval(pollFn, POLLING_INTERVAL) as any;
-    
+
     this.log("socket", `Polling started with interval of ${POLLING_INTERVAL}ms`);
   }
 
@@ -1233,10 +1161,7 @@ export class ComfyApi extends EventTarget {
       const contentType = response.headers.get("content-type") || "image/webp";
       const body = await response.arrayBuffer();
 
-      return {
-        body,
-        contentType
-      };
+      return { body, contentType };
     } catch (error) {
       this.log("getModelPreview", "Error fetching model preview", { folder, pathIndex, filename, error });
       throw error;

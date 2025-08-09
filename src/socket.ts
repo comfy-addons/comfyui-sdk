@@ -25,7 +25,7 @@ if (typeof window !== "undefined" && window.WebSocket) {
 
 export interface WebSocketClientOptions {
   headers?: { [key: string]: string };
-  customWebSocketImpl?: WebSocketInterface;
+  customWebSocketImpl?: WebSocketInterface | null;
 }
 
 export class WebSocketClient {
