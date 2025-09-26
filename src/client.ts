@@ -536,12 +536,12 @@ export class ComfyApi extends EventTarget {
    *          or false if the upload fails.
    */
   async uploadImage(
-    file: Buffer | Blob,
+    file: ArrayBuffer | Uint8Array | Blob,
     fileName: string,
     config?: { override?: boolean; subfolder?: string }
   ): Promise<{ info: ImageInfo; url: string } | false> {
     const formData = new FormData();
-    if (file instanceof Buffer) {
+    if (file instanceof ArrayBuffer || file instanceof Uint8Array) {
       formData.append("image", new Blob([file as BlobPart]), fileName);
     } else {
       formData.append("image", file as Blob, fileName);
@@ -570,15 +570,15 @@ export class ComfyApi extends EventTarget {
   /**
    * Uploads a mask file to the server.
    *
-   * @param file - The mask file to upload, can be a Buffer or Blob.
+   * @param file - The mask file to upload, can be an ArrayBuffer, Uint8Array, or Blob.
    * @param originalRef - The original reference information for the file.
    * @returns A Promise that resolves to an object containing the image info and URL if the upload is successful, or false if the upload fails.
    */
-  async uploadMask(file: Buffer | Blob, originalRef: ImageInfo): Promise<{ info: ImageInfo; url: string } | false> {
+  async uploadMask(file: ArrayBuffer | Uint8Array | Blob, originalRef: ImageInfo): Promise<{ info: ImageInfo; url: string } | false> {
     const formData = new FormData();
 
     // Append the image file to the form data
-    if (file instanceof Buffer) {
+    if (file instanceof ArrayBuffer || file instanceof Uint8Array) {
       formData.append("image", new Blob([file as BlobPart]), "mask.png");
     } else {
       formData.append("image", file as Blob, "mask.png");
@@ -971,9 +971,9 @@ export class ComfyApi extends EventTarget {
       this.socket.client.onmessage = (event) => {
         this.resetLastActivity();
         try {
-          if (event.data instanceof Buffer) {
+          if (event.data instanceof ArrayBuffer) {
             const buffer = event.data;
-            const view = new DataView(buffer.buffer);
+            const view = new DataView(buffer);
             const eventType = view.getUint32(0);
             switch (eventType) {
               case 1:
