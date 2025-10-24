@@ -574,7 +574,10 @@ export class ComfyApi extends EventTarget {
    * @param originalRef - The original reference information for the file.
    * @returns A Promise that resolves to an object containing the image info and URL if the upload is successful, or false if the upload fails.
    */
-  async uploadMask(file: ArrayBuffer | Uint8Array | Blob, originalRef: ImageInfo): Promise<{ info: ImageInfo; url: string } | false> {
+  async uploadMask(
+    file: ArrayBuffer | Uint8Array | Blob,
+    originalRef: ImageInfo
+  ): Promise<{ info: ImageInfo; url: string } | false> {
     const formData = new FormData();
 
     // Append the image file to the form data
@@ -890,7 +893,8 @@ export class ComfyApi extends EventTarget {
         setTimeout(() => {
           if (
             !this.socket?.client ||
-            (this.socket.client.readyState !== WebSocket.OPEN && this.socket.client.readyState !== WebSocket.CONNECTING)
+            (this.socket.client.readyState !== this.socket.OPEN &&
+              this.socket.client.readyState !== this.socket.CONNECTING)
           ) {
             this.log("socket", "Reconnection failed or timed out, retrying...");
             tryReconnect(); // Retry if not connected
@@ -1073,7 +1077,7 @@ export class ComfyApi extends EventTarget {
         this.resetLastActivity();
 
         // Try to re-establish WebSocket connection periodically
-        if (!this.socket || !this.socket.client || this.socket.client.readyState !== WebSocket.OPEN) {
+        if (!this.socket || !this.socket.client || this.socket.client.readyState !== this.socket.OPEN) {
           this.log("socket", "Attempting to restore WebSocket connection");
           try {
             this.createSocket(true);

@@ -34,7 +34,7 @@ export class WebSocketClient {
 
   constructor(url: string, options: WebSocketClientOptions = {}) {
     const { headers, customWebSocketImpl } = options;
-    
+
     // Use custom WebSocket implementation if provided, otherwise use default
     this.webSocketImpl = customWebSocketImpl || DefaultWebSocketImpl;
 
@@ -57,6 +57,23 @@ export class WebSocketClient {
 
   get client() {
     return this.socket;
+  }
+
+  // Expose WebSocket state constants
+  get CONNECTING() {
+    return this.webSocketImpl.CONNECTING;
+  }
+
+  get OPEN() {
+    return this.webSocketImpl.OPEN;
+  }
+
+  get CLOSING() {
+    return this.webSocketImpl.CLOSING;
+  }
+
+  get CLOSED() {
+    return this.webSocketImpl.CLOSED;
   }
 
   public send(message: string) {
