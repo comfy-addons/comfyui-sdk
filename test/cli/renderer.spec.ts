@@ -3,23 +3,31 @@ import { JsonRenderer } from "cli/renderer/json";
 import { QuietRenderer } from "cli/renderer/quiet";
 import { TerminalRenderer } from "cli/renderer/terminal";
 
-function captureConsole(): { logs: string[]; errors: string[]; restore: () => void } {
+function captureConsole(): { logs: string[]; errors: string[]; stdout: string[]; restore: () => void } {
   const logs: string[] = [];
   const errors: string[] = [];
+  const stdout: string[] = [];
   const origLog = console.log;
   const origError = console.error;
+  const origWrite = process.stdout.write.bind(process.stdout);
   console.log = (...args: any[]) => {
     logs.push(args.join(" "));
   };
   console.error = (...args: any[]) => {
     errors.push(args.join(" "));
   };
+  process.stdout.write = (data: any, ...rest: any[]) => {
+    stdout.push(String(data));
+    return origWrite(data, ...rest);
+  };
   return {
     logs,
     errors,
+    stdout,
     restore: () => {
       console.log = origLog;
       console.error = origError;
+      process.stdout.write = origWrite;
     }
   };
 }
@@ -98,13 +106,14 @@ describe("TerminalRenderer", () => {
   });
 
   it("should output Node and progress info on onProgress", () => {
-    const { logs, restore } = captureConsole();
+    const { stdout, restore } = captureConsole();
     try {
       const renderer = new TerminalRenderer("http://server:8188", "workflow.json");
       renderer.onProgress({ value: 10, max: 20, node: "3", prompt_id: "abc" });
-      expect(logs).toHaveLength(1);
-      expect(logs[0]).toContain("Node 3");
-      expect(logs[0]).toContain("10/20");
+      expect(stdout.length).toBeGreaterThan(0);
+      const output = stdout.join(" ");
+      expect(output).toContain("Node 3");
+      expect(output).toContain("10/20");
     } finally {
       restore();
     }

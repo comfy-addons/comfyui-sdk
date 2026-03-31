@@ -3,7 +3,7 @@
     "inputs": {
       "seed": 1108860874231405,
       "steps": 20,
-      "cfg": 8,
+      "cfg": 4,
       "sampler_name": "euler",
       "scheduler": "normal",
       "denoise": 1,
@@ -40,8 +40,8 @@
   },
   "5": {
     "inputs": {
-      "width": 512,
-      "height": 512,
+      "width": 1024,
+      "height": 1024,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -51,7 +51,7 @@
   },
   "6": {
     "inputs": {
-      "text": "beautiful scenery nature glass bottle landscape, , purple galaxy bottle,",
+      "text": "A anime picture of Miku wearing sexy dress on the jungle, holding a light saber",
       "clip": [
         "4",
         1

@@ -2,8 +2,15 @@ import { parseArgs, USAGE_TEXT } from "cli/args";
 import { runWorkflow, buildResultOverrides, extractMediaFromOutputs } from "cli/runner";
 import { createRenderer } from "cli/renderer/index";
 import type { RunResult } from "cli/renderer/json";
+import { buildInspectData, renderInspect } from "cli/commands/inspect";
+import { listResources, isValidResource } from "cli/commands/list";
+import { downloadOutputs } from "cli/commands/download";
+import { showQueue } from "cli/commands/queue";
+import { watchMode } from "cli/commands/watch";
 
-const VERSION = "0.2.49";
+const VERSION = "0.2.50";
+
+import { isFilePath } from "cli/runner";
 
 function buildMedia(
   host: string,
@@ -12,7 +19,8 @@ function buildMedia(
   outputDir: string
 ): Promise<Record<string, string>> {
   if (!outputs) return Promise.resolve({});
-  return extractMediaFromOutputs(host, outputs, download ? outputDir : null);
+  const shouldDownload = download || isFilePath(outputDir);
+  return extractMediaFromOutputs(host, outputs, shouldDownload ? outputDir : null);
 }
 
 export async function main(): Promise<void> {
@@ -28,6 +36,25 @@ export async function main(): Promise<void> {
     return;
   }
 
+  switch (args.subcommand) {
+    case "inspect":
+      return cmdInspect(args);
+    case "list":
+      return cmdList(args);
+    case "queue":
+      return cmdQueue(args);
+    case "download":
+      return cmdDownload(args);
+    case "run":
+    default:
+      if (args.watch) {
+        return cmdWatch(args);
+      }
+      return cmdRun(args);
+  }
+}
+
+async function cmdRun(args: ReturnType<typeof parseArgs>): Promise<void> {
   if (!args.file) {
     console.error("Error: -f/--file is required\n");
     console.log(USAGE_TEXT);
@@ -38,7 +65,6 @@ export async function main(): Promise<void> {
   const renderer = createRenderer(mode, args.host, args.file);
 
   const startTime = performance.now();
-
   let exitCode = 0;
 
   try {
@@ -106,4 +132,66 @@ export async function main(): Promise<void> {
   }
 
   process.exit(exitCode);
+}
+
+async function cmdInspect(args: ReturnType<typeof parseArgs>): Promise<void> {
+  if (!args.file) {
+    console.error("Error: -f/--file is required for inspect\n");
+    console.log(USAGE_TEXT);
+    return;
+  }
+
+  const data = await buildInspectData(args.file);
+  await renderInspect(data, args.json);
+}
+
+async function cmdList(args: ReturnType<typeof parseArgs>): Promise<void> {
+  if (!args.resource) {
+    console.error("Error: resource argument required. Usage: cfli list <checkpoints|loras|embeddings|samplers>\n");
+    console.log(USAGE_TEXT);
+    return;
+  }
+
+  if (!isValidResource(args.resource)) {
+    console.error(`Error: unknown resource "${args.resource}". Available: checkpoints, loras, embeddings, samplers\n`);
+    return;
+  }
+
+  await listResources(args.host, args.resource, args.json, args.token, args.user, args.pass);
+}
+
+async function cmdQueue(args: ReturnType<typeof parseArgs>): Promise<void> {
+  await showQueue(args.host, args.json, args.token, args.user, args.pass);
+}
+
+async function cmdDownload(args: ReturnType<typeof parseArgs>): Promise<void> {
+  if (!args.promptId) {
+    console.error("Error: prompt_id argument required. Usage: cfli download <prompt_id>\n");
+    console.log(USAGE_TEXT);
+    return;
+  }
+
+  await downloadOutputs(args.host, args.promptId, args.output, args.json, args.token, args.user, args.pass);
+}
+
+async function cmdWatch(args: ReturnType<typeof parseArgs>): Promise<void> {
+  if (!args.file) {
+    console.error("Error: -f/--file is required for watch mode\n");
+    console.log(USAGE_TEXT);
+    return;
+  }
+
+  await watchMode({
+    file: args.file,
+    inputs: args.inputs,
+    host: args.host,
+    timeout: args.timeout,
+    output: args.output,
+    download: args.download,
+    noDownload: args.noDownload,
+    token: args.token,
+    user: args.user,
+    pass: args.pass,
+    outputNodes: args.outputNodes
+  });
 }

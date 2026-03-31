@@ -1,9 +1,21 @@
+import { resolve, basename, extname, dirname } from "path";
+import { mkdirSync, writeFileSync } from "fs";
 import { ComfyApi } from "src/client";
 import { CallWrapper } from "src/call-wrapper";
 import { PromptBuilder } from "src/prompt-builder";
 import { loadWorkflow, detectOutputNodes } from "cli/utils/fs";
 import { coerceValue, isValidNodePath } from "cli/utils/value-parser";
 import type { ImageInfo } from "src/types/api";
+
+const EXT_RE = /\.[^.]+$/;
+
+export function isFilePath(output: string): boolean {
+  return EXT_RE.test(basename(output));
+}
+
+function getTargetExt(output: string): string {
+  return extname(output).toLowerCase();
+}
 
 export interface RunConfig {
   file: string;
@@ -28,7 +40,7 @@ export interface MediaEntry {
 export async function extractMediaFromOutputs(
   host: string,
   outputs: Record<string, any>,
-  outputDir: string | null
+  outputPath: string | null
 ): Promise<Record<string, string>> {
   const media: Record<string, string> = {};
 
@@ -57,22 +69,37 @@ export async function extractMediaFromOutputs(
     const url = `${baseUrl}/view?${params}`;
     media[img.filename] = url;
 
-    if (outputDir) {
+    if (outputPath) {
       try {
-        const { mkdirSync, writeFileSync } = await import("fs");
-        const { resolve, basename } = await import("path");
-        mkdirSync(outputDir, { recursive: true });
-        const localPath = resolve(outputDir, basename(img.filename));
+        const targetExt = getTargetExt(outputPath);
 
-        const res = await fetch(url);
-        if (res.ok) {
-          const buf = await res.arrayBuffer();
-          writeFileSync(localPath, new Uint8Array(buf));
-          media[img.filename] = `${url} -> ${localPath}`;
+        if (isFilePath(outputPath)) {
+          const imgExt = extname(img.filename).toLowerCase();
+          if (imgExt !== targetExt) continue;
+
+          if (media[img.filename].includes(" -> ")) continue;
+
+          const dir = dirname(outputPath);
+          mkdirSync(dir, { recursive: true });
+
+          const res = await fetch(url);
+          if (res.ok) {
+            const buf = await res.arrayBuffer();
+            writeFileSync(outputPath, new Uint8Array(buf));
+            media[img.filename] = `${url} -> ${outputPath}`;
+          }
+        } else {
+          mkdirSync(outputPath, { recursive: true });
+          const localPath = resolve(outputPath, basename(img.filename));
+
+          const res = await fetch(url);
+          if (res.ok) {
+            const buf = await res.arrayBuffer();
+            writeFileSync(localPath, new Uint8Array(buf));
+            media[img.filename] = `${url} -> ${localPath}`;
+          }
         }
-      } catch {
-        // download failed, keep URL only
-      }
+      } catch {}
     }
   }
 

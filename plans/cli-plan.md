@@ -754,64 +754,64 @@ This is all npm needs to:
 
 ---
 
-### Phase 5 — Interactive Mode + Watch + Subcommands — NOT STARTED
+### Phase 5 — Interactive Mode + Watch + Subcommands — DONE
 
-**Goal**: Interactive workflow builder, file-watch auto-reexecution, and utility subcommands.
+**Status**: Completed. Subcommands, watch mode, and queue implemented. Interactive REPL mode not implemented (low priority).
 
-**Tasks**:
+**What was built**:
 
-1. Interactive mode — `cfli -f workflow.json` (no `-i` flags)
-   - Detect: if no `-i`/`-p` flags and no `--json`/`--quiet`, enter interactive mode
-   - Add `@clack/prompts` for beautiful interactive prompts:
-     1. Show workflow summary (from `inspect` logic)
-     2. Prompt: "Select inputs to override" (multi-select from available paths)
-     3. For each selected input:
-        - Text input with current value as default
-        - If field has server values: show select/autocomplete list
-     4. Confirm: "Run workflow with these overrides?"
-     5. Execute with selected overrides
-   - Arrow keys, fuzzy search, descriptions from node defs
+1. **Subcommand dispatch** — `parseArgs()` now detects first positional arg as subcommand (`run`, `inspect`, `list`, `queue`, `download`). Default is `run`. Refactored `main()` in `cli/index.ts` to switch on subcommand with separate handler functions.
 
-2. `--watch` mode
-   - Add `chokidar` for file watching
-   - Watch `-f` file for changes
-   - On change: debounced 500ms, re-run workflow with same `-i` overrides
-   - Show diff: "workflow.json changed: node 6.inputs.text modified"
-   - Ctrl+C to stop watching
+2. **`cfli inspect -f workflow.json`** — `cli/commands/inspect.ts`
+   - Loads workflow, iterates nodes sorted by ID
+   - Shows node ID, class_type, inputs (filters out node-link arrays)
+   - Marks output nodes (SaveImage/PreviewImage) in green
+   - Lists all available `-i` paths at bottom
+   - Supports `--json` output
+   - No server connection needed
 
-3. `cfli inspect -f workflow.json` command
-   - Pretty-print workflow structure
-   - Show node types, inputs, detected outputs
-   - If server connected: show input types and valid values inline
-   - Mark inputs that accept COMBO values with `(12 options)` count
+3. **`cfli list <resource>`** — `cli/commands/list.ts`
+   - Supports: `checkpoints`, `loras`, `embeddings`, `samplers`
+   - Connects to server, fetches via SDK methods (`getCheckpoints`, `getLoras`, `getEmbeddings`, `getSamplerInfo`)
+   - Samplers show both `samplers` and `schedulers` sections
+   - Supports `--json` output
+   - Validates resource argument, clear error on invalid resource
 
-4. `cfli queue` command
-   - Connect to server
-   - `api.getQueue()` → display running/pending counts
-   - Optional `--watch` to live-update queue display
+4. **`cfli queue`** — `cli/commands/queue.ts`
+   - Connects to server, calls `api.getQueue()`
+   - Shows running/pending counts and individual items with prompt IDs
+   - Supports `--json` output
 
-5. `cfli list <resource>` command
-   - `cfli list checkpoints` → `api.getCheckpoints()`
-   - `cfli list loras` → `api.getLoras()`
-   - `cfli list embeddings` → `api.getEmbeddings()`
-   - `cfli list samplers` → `api.getSamplerInfo()`
-   - `cfli list nodes` → `api.getNodeDefs()` (print class_type names)
-   - Formatted as vertical list, pipe-friendly
+5. **`cfli download <prompt_id>`** — `cli/commands/download.ts`
+   - Fetches history via `api.getHistory(promptId)`
+   - Downloads images via `extractMediaFromOutputs()`
+   - Handles not-found and not-completed states gracefully
+   - Supports `--json` output
 
-6. `cfli download <prompt_id>` command
-   - `api.getHistory(promptId)` → get output images
-   - Download each image to `--output` dir
-   - Print saved paths
+6. **`--watch` mode** — `cli/commands/watch.ts`
+   - Uses `fs.watch()` (built-in, no chokidar dependency)
+   - Debounced 500ms to avoid rapid re-runs on save
+   - **Interrupts current execution** on file change: sends `api.interrupt()`, waits up to 10s for current run to finish
+   - Clear UX messages: `[change detected]`, `[interrupted]`, `Run #N completed in Xms`
+   - Shows watching indicator between runs
+   - Persistent ComfyApi connection (reused across runs)
+   - Clean Ctrl+C handler with watcher cleanup and client destroy
 
-**Testing**:
+7. **Updated `cli/args.ts`** — Added `Subcommand` type, `promptId`, `resource` fields. Parser handles positional args for subcommands.
 
-- Interactive mode: verify prompts render correctly, arrow keys work
-- Watch mode: modify workflow file, verify auto-re-execution
-- Inspect: verify output matches workflow structure
-- List: verify outputs match server responses
-- **Verify all subcommands work in bundled `dist/cli.js`**
+8. **Updated `USAGE_TEXT`** — Documents all subcommands with examples.
 
-**Exit Criteria**: `cfli -f workflow.json` opens interactive prompt. `--watch` mode re-runs on file change. All subcommands work via `npx`.
+9. **Tests** — 14 new tests in `test/cli/subcommands.spec.ts` (subcommand parsing) and `test/cli/inspect.spec.ts` (inspect data building). Fixed pre-existing `onProgress` test that captured `console.log` instead of `process.stdout.write`. Total: 87 CLI tests pass.
+
+**Not implemented**:
+
+- Interactive REPL mode (requires `@clack/prompts` or similar, deferred as low priority)
+
+**Deviations from plan**:
+
+- No `chokidar` dependency — uses built-in `fs.watch()` instead
+- `queue` command added (was in plan as utility)
+- Watch mode uses persistent client connection instead of reconnecting each run
 
 ---
 

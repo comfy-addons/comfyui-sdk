@@ -1,4 +1,7 @@
+export type Subcommand = "run" | "inspect" | "list" | "download" | "queue";
+
 export interface ParsedArgs {
+  subcommand: Subcommand;
   file?: string;
   inputs: Array<{ key: string; value: string }>;
   host: string;
@@ -17,11 +20,20 @@ export interface ParsedArgs {
   watch: boolean;
   interactive: boolean;
   outputNodes?: string[];
+  promptId?: string;
+  resource?: string;
 }
 
 export const USAGE_TEXT = `cfli - ComfyUI CLI workflow runner
 
-Usage: cfli [options] -f <workflow.json>
+Usage: cfli [command] [options]
+
+Commands:
+  run [options]                 Execute workflow (default command)
+  inspect -f <workflow.json>    Show workflow nodes, inputs, and output paths
+  list <resource>               List server resources (checkpoints|loras|embeddings|samplers)
+  queue                         Show server queue status
+  download <prompt_id>          Re-download outputs from a previous run
 
 Options:
   -f, --file <path>           Workflow JSON file to execute
@@ -46,8 +58,13 @@ Options:
 
 Examples:
   cfli -f workflow.json -i "seed=42" -o ./results
+  cfli inspect -f workflow.json
+  cfli list checkpoints
+  cfli queue
+  cfli download abc-123-def
   cfli -f workflow.json --host http://192.168.1.100:8188 --json --quiet
   cfli -f workflow.json --output-nodes 9,12 --download
+  cfli -f workflow.json -i 6.inputs.text="cat" --watch
 `;
 
 const VALUE_FLAGS = new Set([
@@ -97,7 +114,10 @@ function requireValue(flag: string, args: string[], i: number): string {
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
+  const SUBCOMMANDS = new Set<string>(["run", "inspect", "list", "download", "queue"]);
+
   const result: ParsedArgs = {
+    subcommand: "run",
     inputs: [],
     host: process.env.COMFYUI_HOST || "http://localhost:8188",
     timeout: 120000,
@@ -117,6 +137,21 @@ export function parseArgs(argv: string[]): ParsedArgs {
     const arg = argv[i];
 
     if (!arg.startsWith("-")) {
+      if (SUBCOMMANDS.has(arg)) {
+        result.subcommand = arg as Subcommand;
+        i += 1;
+        continue;
+      }
+      if (result.subcommand === "download") {
+        result.promptId = arg;
+        i += 1;
+        continue;
+      }
+      if (result.subcommand === "list") {
+        result.resource = arg;
+        i += 1;
+        continue;
+      }
       throw new Error(`Unknown argument: ${arg}\n${USAGE_TEXT}`);
     }
 
