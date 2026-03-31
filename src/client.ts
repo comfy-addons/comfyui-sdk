@@ -9,7 +9,6 @@ import {
   ImageInfo,
   ModelFile,
   ModelFolder,
-  ModelPreviewResponse,
   NodeDefsResponse,
   OSType,
   QueuePromptResponse,
@@ -734,6 +733,7 @@ export class ComfyApi extends EventTarget {
 
   /**
    * Lists user data files for the current user.
+   * @deprecated Use {@link listUserDataV2} for structured file info including size and modification time.
    * @param {string} dir The directory in which to list files.
    * @param {boolean} [recurse] If the listing should be recursive.
    * @param {boolean} [split] If the paths should be split based on the OS path separator.
@@ -754,11 +754,101 @@ export class ComfyApi extends EventTarget {
   }
 
   /**
+   * Lists user data files with structured metadata (v2).
+   * @param {string} dir The directory in which to list files.
+   * @returns {Promise<UserDataV2Entry[]>} The list of files and directories with metadata.
+   */
+  async listUserDataV2(dir: string): Promise<import("./types/api").UserDataV2Entry[]> {
+    const response = await this.fetchApi(`/v2/userdata?dir=${encodeURIComponent(dir)}`);
+
+    if (response.status === 404) return [];
+    if (response.status !== 200) {
+      this.log("listUserDataV2", "Error getting user data v2 list", response);
+      throw new Error(`Error getting user data v2 list '${dir}': ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
    * Interrupts the execution of the running prompt.
    * @returns {Promise<void>}
    */
   async interrupt(): Promise<void> {
     await this.fetchApi("/interrupt", { method: "POST" });
+  }
+
+  /**
+   * Retrieves server features and capabilities.
+   * @returns {Promise<ServerFeatures>} The server features.
+   */
+  async getFeatures(): Promise<import("./types/api").ServerFeatures> {
+    const response = await this.fetchApi("/features");
+    return response.json();
+  }
+
+  /**
+   * Retrieves a list of available model types (folders).
+   * @returns {Promise<string[]>} The list of model type names.
+   */
+  async getModelTypes(): Promise<string[]> {
+    const response = await this.fetchApi("/models");
+    return response.json();
+  }
+
+  /**
+   * Retrieves models in a specific folder.
+   * @param folder - The folder name (e.g. "checkpoints", "loras").
+   * @returns {Promise<string[]>} The list of model names in the folder.
+   */
+  async getModels(folder: string): Promise<string[]> {
+    const response = await this.fetchApi(`/models/${encodeURIComponent(folder)}`);
+    return response.json();
+  }
+
+  /**
+   * Retrieves workflow templates registered by custom nodes.
+   * @returns {Promise<WorkflowTemplates>} A map of module names to template workflow names.
+   */
+  async getWorkflowTemplates(): Promise<import("./types/api").WorkflowTemplates> {
+    const response = await this.fetchApi("/workflow_templates");
+    return response.json();
+  }
+
+  /**
+   * Retrieves metadata for a model file.
+   * @param folder - The folder name (e.g. "checkpoints").
+   * @param filename - The model filename.
+   * @returns {Promise<ModelMetadata>} The model metadata.
+   */
+  async getViewMetadata(folder: string, filename: string): Promise<import("./types/api").ModelMetadata> {
+    const response = await this.fetchApi(
+      `/view_metadata/${encodeURIComponent(folder)}?${new URLSearchParams({ filename })}`
+    );
+    if (response.status === 404) return {};
+    return response.json();
+  }
+
+  /**
+   * Clears all history or deletes specific history items.
+   * @param options - Options for clearing history.
+   * @param options.clear - If true, clears all history.
+   * @param options.delete - Array of prompt IDs to delete.
+   * @returns {Promise<void>}
+   */
+  async clearHistory(options: import("./types/api").HistoryClearRequest): Promise<void> {
+    await this.fetchApi("/history", { method: "POST", body: JSON.stringify(options) });
+  }
+
+  /**
+   * Manages the execution queue (clear pending/running items or delete specific items).
+   * @param options - Options for managing the queue.
+   * @param options.clear - If true with "queue_running" or "queue_pending", clears that queue.
+   * @param options.delete - Array of prompt IDs to delete from the queue.
+   * @returns {Promise<void>}
+   */
+  async manageQueue(options: import("./types/api").QueueManageRequest): Promise<void> {
+    await this.fetchApi("/queue", { method: "POST", body: JSON.stringify(options) });
   }
 
   /**
@@ -1105,8 +1195,9 @@ export class ComfyApi extends EventTarget {
   }
 
   /**
-   * Retrieves a list of all available model folders.
-   * @experimental API that may change in future versions
+   * Retrieves a list of all available model folders with full paths.
+   * @deprecated Use {@link getModelTypes} for the stable API. This experimental endpoint returns folder paths
+   *             which may vary by deployment.
    * @returns A promise that resolves to an array of ModelFolder objects.
    */
   async getModelFolders(): Promise<ModelFolder[]> {
@@ -1124,8 +1215,9 @@ export class ComfyApi extends EventTarget {
   }
 
   /**
-   * Retrieves a list of all model files in a specific folder.
-   * @experimental API that may change in future versions
+   * Retrieves a list of all model files in a specific folder with extended info.
+   * @deprecated Use {@link getModels} for the stable API. This experimental endpoint returns pathIndex and timestamps
+   *             which may vary by deployment.
    * @param folder - The name of the model folder.
    * @returns A promise that resolves to an array of ModelFile objects.
    */
@@ -1141,48 +1233,5 @@ export class ComfyApi extends EventTarget {
       this.log("getModelFiles", "Error fetching model files", { folder, error });
       throw error;
     }
-  }
-
-  /**
-   * Retrieves a preview image for a specific model file.
-   * @experimental API that may change in future versions
-   * @param folder - The name of the model folder.
-   * @param pathIndex - The index of the folder path where the file is stored.
-   * @param filename - The name of the model file.
-   * @returns A promise that resolves to a ModelPreviewResponse object containing the preview image data.
-   */
-  async getModelPreview(folder: string, pathIndex: number, filename: string): Promise<ModelPreviewResponse> {
-    try {
-      const response = await this.fetchApi(
-        `/experiment/models/preview/${encodeURIComponent(folder)}/${pathIndex}/${encodeURIComponent(filename)}`
-      );
-
-      if (!response.ok) {
-        this.log("getModelPreview", "Failed to fetch model preview", { folder, pathIndex, filename, response });
-        throw new Error(`Failed to fetch model preview: ${response.status} ${response.statusText}`);
-      }
-
-      const contentType = response.headers.get("content-type") || "image/webp";
-      const body = await response.arrayBuffer();
-
-      return { body, contentType };
-    } catch (error) {
-      this.log("getModelPreview", "Error fetching model preview", { folder, pathIndex, filename, error });
-      throw error;
-    }
-  }
-
-  /**
-   * Creates a URL for a model preview image.
-   * @experimental API that may change in future versions
-   * @param folder - The name of the model folder.
-   * @param pathIndex - The index of the folder path where the file is stored.
-   * @param filename - The name of the model file.
-   * @returns The URL string for the model preview.
-   */
-  getModelPreviewUrl(folder: string, pathIndex: number, filename: string): string {
-    return this.apiURL(
-      `/experiment/models/preview/${encodeURIComponent(folder)}/${pathIndex}/${encodeURIComponent(filename)}`
-    );
   }
 }

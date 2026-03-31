@@ -225,3 +225,38 @@ export interface ModelFileListResponse {
 export interface ModelFoldersResponse {
   folders: ModelFolder[];
 }
+
+export interface ServerFeatures {
+  supports_preview_metadata: boolean;
+  max_upload_size: number;
+  node_replacements: boolean;
+  assets: boolean;
+  extension?: Record<string, Record<string, any>>;
+  [key: string]: any;
+}
+
+export interface WorkflowTemplates {
+  [moduleName: string]: string[];
+}
+
+export interface ModelMetadata {
+  [key: string]: any;
+}
+
+export interface HistoryClearRequest {
+  clear?: boolean;
+  delete?: string[];
+}
+
+export interface QueueManageRequest {
+  clear?: boolean | string[];
+  delete?: string[];
+}
+
+export interface UserDataV2Entry {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  size?: number;
+  modified?: number;
+}

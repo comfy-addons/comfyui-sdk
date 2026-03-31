@@ -24,18 +24,18 @@
   },
   "homepage": "https://github.com/tctien342/comfyui-sdk#readme",
   "devDependencies": {
-    "@types/bun": "^1.1.11",
-    "@types/jest": "^29.5.12",
-    "@types/node": "^22.2.0",
-    "@types/ws": "^8.5.12",
-    "auto-changelog": "^2.3.0",
-    "commitizen": "^4.2.4",
+    "@types/bun": "^1.3.11",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.19.15",
+    "@types/ws": "^8.18.1",
+    "auto-changelog": "^2.5.0",
+    "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0",
     "dts-bundle-generator": "^9.5.1",
-    "prettier": "^3.4.2"
+    "prettier": "^3.8.1"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.5.3"
   },
   "keywords": [
     "comfyui",
@@ -48,12 +48,14 @@
     "comfyui-sdk"
   ],
   "dependencies": {
-    "ws": "^8.18.0"
+    "ws": "^8.20.0"
   },
   "scripts": {
     "version": "auto-changelog -p",
     "commit": "git-cz",
     "build": "bun build.ts",
+    "test": "bun test",
+    "test:integration": "COMFYUI_HOST=http://192.168.14.93:8188 bun test",
     "format": "prettier --write ."
   },
   "files": [
