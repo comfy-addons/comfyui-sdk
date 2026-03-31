@@ -21,8 +21,8 @@
     "noUnusedParameters": false,
     "esModuleInterop": true,
     "baseUrl": ".",
-    "typeRoots": ["./node_modules/@types"]
+    "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "include": ["src/**/*", "index.ts", "test", "build.ts"],
-  "exclude": ["node_modules", "build", "dist"]
+  "include": ["src/**/*", "index.ts"],
+  "exclude": ["node_modules", "build", "dist", "cli", "test"]
 }

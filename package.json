@@ -1,10 +1,13 @@
 {
   "name": "@saintno/comfyui-sdk",
-  "version": "0.2.49",
+  "version": "0.2.50",
   "description": "SDK for ComfyUI",
   "main": "build/index.esm.js",
   "typings": "build/index.d.ts",
   "type": "module",
+  "bin": {
+    "cfli": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "import": "./build/index.esm.js",
@@ -54,12 +57,18 @@
     "version": "auto-changelog -p",
     "commit": "git-cz",
     "build": "bun build.ts",
+    "build:cli": "bun cli/build.ts",
+    "build:all": "bun run build && bun run build:cli",
+    "cli:dev": "bun cli/bin.ts",
     "test": "bun test",
+    "test:cli": "bun test test/cli",
+    "test:cli:integration": "COMFYUI_HOST=http://192.168.14.93:8188 bun test test/cli",
     "test:integration": "COMFYUI_HOST=http://192.168.14.93:8188 bun test",
     "format": "prettier --write ."
   },
   "files": [
-    "build"
+    "build",
+    "dist/cli.js"
   ],
   "config": {
     "commitizen": {

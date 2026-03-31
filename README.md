@@ -11,6 +11,12 @@ A robust and meticulously crafted TypeScript SDK 🚀 for seamless interaction w
 
 - [🌟 Key Features 🌟](#-key-features-)
 - [📦 Installation 📦](#-installation-)
+- [🛠️ CLI — `cfli` 🛠️](#-cli--cfli-)
+  - [Install](#install)
+  - [Quick Start](#quick-start)
+  - [Flags](#flags)
+  - [Output Format](#output-format)
+  - [Downloading Media](#downloading-media)
 - [🚀 Getting Started 🚀](#-getting-started-)
   - [🎬 Basic Usage](#-basic-usage)
   - [🔄 Managing Multiple Instances with `ComfyPool`](#-managing-multiple-instances-with-comfypool)
@@ -53,7 +59,106 @@ or
 npm i @saintno/comfyui-sdk
 ```
 
-## 🚀 Getting Started 🚀
+## 🛠️ CLI — `cfli`
+
+Run ComfyUI workflows directly from the terminal. Installed automatically with the SDK.
+
+### Install
+
+```bash
+# Already included with the SDK
+npm install -g @saintno/comfyui-sdk
+
+# Or use without installing
+npx @saintno/comfyui-sdk -f workflow.json --json
+```
+
+### Quick Start
+
+```bash
+cfli -f workflow.json \
+  -i 4.inputs.ckpt_name=SDXL/realvisxlV40_v40LightningBakedvae.safetensors \
+  -i 5.inputs.width=1024 \
+  -i 5.inputs.height=1024 \
+  -p 6.inputs.text="A picture of cute cat"
+```
+
+### Flags
+
+| Flag                          | Short | Description                                                              |
+| ----------------------------- | ----- | ------------------------------------------------------------------------ |
+| `-f, --file <path>`           |       | Workflow JSON file to execute (required)                                 |
+| `-i, --input <key=value>`     |       | Set workflow input value (repeatable)                                    |
+| `-p, --prompt <key=value>`    |       | Alias for `--input`                                                      |
+| `-H, --host <url>`            |       | ComfyUI server URL (default: `$COMFYUI_HOST` or `http://localhost:8188`) |
+| `-t, --timeout <ms>`          |       | Execution timeout (default: `120000`)                                    |
+| `-o, --output <dir>`          |       | Output directory for downloads (default: `./output`)                     |
+| `-j, --json`                  |       | Output results as JSON                                                   |
+| `-q, --quiet`                 |       | Suppress progress output                                                 |
+| `-d, --download`              |       | Download output images to `-o` directory                                 |
+| `--no-download`               |       | Skip downloading output images                                           |
+| `--token <token>`             |       | Bearer token for authentication                                          |
+| `--user <user> --pass <pass>` |       | Basic auth credentials                                                   |
+| `--output-nodes <id,id>`      |       | Comma-separated node IDs to capture output                               |
+| `-v, --version`               |       | Print version                                                            |
+| `-h, --help`                  |       | Show help                                                                |
+
+### Output Format
+
+Terminal mode (default):
+
+```
+Connected to http://192.168.14.93:8188
+Queued: 3c9b01ee-eaed-435a-8c0c-2a41706c5c90
+Done sample.json in 508ms
+Outputs: _raw
+Media:
+  ComfyUI_00102_.png: http://192.168.14.93:8188/view?filename=ComfyUI_00102_.png&type=output&subfolder=
+```
+
+JSON mode (`--json`):
+
+```json
+{
+  "status": "completed",
+  "duration_ms": 531,
+  "server": { "host": "http://192.168.14.93:8188" },
+  "overrides": { "6.inputs.text": "A picture of cute cat" },
+  "outputs": {
+    "_raw": {
+      "9": {
+        "images": [{ "filename": "ComfyUI_00102_.png", "subfolder": "", "type": "output" }]
+      }
+    }
+  },
+  "_media": {
+    "ComfyUI_00102_.png": "http://192.168.14.93:8188/view?filename=ComfyUI_00102_.png&type=output&subfolder="
+  }
+}
+```
+
+### Downloading Media
+
+Use `-d` to auto-download all output images:
+
+```bash
+cfli -f workflow.json -d
+# Saves to ./output/ComfyUI_00102_.png
+
+cfli -f workflow.json -d -o ./renders
+# Saves to ./renders/ComfyUI_00102_.png
+```
+
+In download mode, the `_media` and terminal output show both the URL and local path:
+
+```
+Media:
+  ComfyUI_00102_.png: http://... -> /Users/you/output/ComfyUI_00102_.png
+```
+
+---
+
+## 🚀 Getting Started (SDK) 🚀
 
 ### 🎬 Basic Usage
 

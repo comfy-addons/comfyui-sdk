@@ -179,3 +179,4 @@ build
 test.ts
 test.js
 temp/
+output
