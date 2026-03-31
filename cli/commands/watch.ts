@@ -4,7 +4,8 @@ import { PromptBuilder } from "src/prompt-builder";
 import { loadWorkflow, detectOutputNodes } from "cli/utils/fs";
 import { coerceValue, isValidNodePath } from "cli/utils/value-parser";
 import { extractMediaFromOutputs, buildResultOverrides, isFilePath } from "cli/runner";
-import { createRenderer } from "cli/renderer/index";
+import { createRenderer, resolveMode } from "cli/renderer/index";
+import type { TuiRenderer } from "cli/renderer/tui";
 import type { RunResult } from "cli/renderer/json";
 import type { RunConfig } from "cli/runner";
 
@@ -28,9 +29,14 @@ interface WatchState {
   client: ComfyApi | null;
 }
 
-export async function watchMode(config: RunConfig): Promise<void> {
-  const mode = config.noDownload ? "terminal" : config.download ? "terminal" : "terminal";
-  const renderer = createRenderer(config.json ? "json" : config.quiet ? "quiet" : "terminal", config.host, config.file);
+function isTui(renderer: any): renderer is TuiRenderer {
+  return renderer && typeof renderer.showWatchStatus === "function";
+}
+
+export async function watchMode(config: RunConfig, noTui = false): Promise<void> {
+  const mode = resolveMode(config.json, config.quiet);
+  const useTui = mode === "terminal" && !noTui;
+  const renderer = createRenderer(mode, config.host, config.file, useTui, noTui, useTui);
 
   const state: WatchState = {
     runNumber: 0,
@@ -40,8 +46,12 @@ export async function watchMode(config: RunConfig): Promise<void> {
     client: null
   };
 
-  console.log(c.bold(c.blue("Watching")) + ` ${config.file} ${c.dim("(Ctrl+C to stop)")}`);
-  console.log();
+  if (!useTui) {
+    console.log(c.bold(c.blue("Watching")) + ` ${config.file} ${c.dim("(Ctrl+C to stop)")}`);
+    console.log();
+  } else {
+    isTui(renderer) && renderer.showWatchStatus(`Watching ${config.file} (Ctrl+C to stop)`);
+  }
 
   let credentials: any;
   if (config.token) {
@@ -53,8 +63,12 @@ export async function watchMode(config: RunConfig): Promise<void> {
   state.client = new ComfyApi(config.host, undefined, credentials ? { credentials } : undefined);
 
   await state.client.init(5, 2000).waitForReady();
-  console.log(c.green("Connected") + ` to ${config.host}`);
-  console.log();
+  if (isTui(renderer)) {
+    renderer.onConnect();
+  } else {
+    console.log(c.green("Connected") + ` to ${config.host}`);
+    console.log();
+  }
 
   const runOnce = async () => {
     state.runNumber++;
@@ -62,11 +76,17 @@ export async function watchMode(config: RunConfig): Promise<void> {
     const startTime = performance.now();
     let interrupted = false;
 
+    if (isTui(renderer)) {
+      renderer.resetRun();
+    }
+
     try {
       const rawResult = await executeWorkflow(state.client!, config, renderer);
       const durationMs = Math.round(performance.now() - startTime);
 
-      if (!config.json) {
+      if (isTui(renderer)) {
+        renderer.showRunComplete(runNum, durationMs);
+      } else if (!config.json) {
         console.log(c.dim(`[${c.bold(`Run #${runNum}`)}]`) + ` completed in ${c.dim(`${durationMs}ms`)}`);
       }
 
@@ -94,6 +114,11 @@ export async function watchMode(config: RunConfig): Promise<void> {
 
       if (msg.includes("interrupted") || msg.includes("Interrupted") || msg.includes("Workflow execution failed")) {
         interrupted = true;
+        if (isTui(renderer)) {
+          renderer.showInterrupt(runNum);
+        }
+      } else if (isTui(renderer)) {
+        renderer.showRunFailed(runNum, error.message);
       } else if (!config.json) {
         console.log(c.red(`[${c.bold(`Run #${runNum}`)}]`) + ` failed: ${error.message}`);
       } else {
@@ -108,7 +133,7 @@ export async function watchMode(config: RunConfig): Promise<void> {
       }
     }
 
-    if (!interrupted && !config.json) {
+    if (!interrupted && !isTui(renderer) && !config.json) {
       console.log();
       console.log(c.dim(`${c.blue("watching")} ${config.file} ...`));
     }
@@ -129,7 +154,9 @@ export async function watchMode(config: RunConfig): Promise<void> {
       state.debounceTimer = null;
 
       if (state.running) {
-        if (!config.json) {
+        if (isTui(renderer)) {
+          renderer.showWatchStatus(`change detected, interrupting Run #${state.runNumber}...`);
+        } else if (!config.json) {
           console.log();
           console.log(c.yellow("[change detected]") + ` ${c.dim(`interrupting Run #${state.runNumber}...`)}`);
         }
@@ -144,13 +171,17 @@ export async function watchMode(config: RunConfig): Promise<void> {
         }
 
         if (state.running) {
-          if (!config.json) {
+          if (isTui(renderer)) {
+            renderer.showWatchStatus("previous run did not stop, starting new run anyway");
+          } else if (!config.json) {
             console.log(c.yellow("[warning]") + ` previous run did not stop, starting new run anyway`);
           }
           state.running = false;
         }
 
-        if (!config.json) {
+        if (isTui(renderer)) {
+          renderer.showInterrupt(state.runNumber);
+        } else if (!config.json) {
           console.log(c.yellow("[interrupted]") + ` ${c.dim(`Run #${state.runNumber}`)}`);
         }
       }
@@ -166,8 +197,12 @@ export async function watchMode(config: RunConfig): Promise<void> {
       if (state.debounceTimer) clearTimeout(state.debounceTimer);
       watcher.close();
       state.client!.destroy();
-      console.log();
-      console.log(c.dim("Stopped watching."));
+      if (isTui(renderer)) {
+        renderer.stop();
+      } else {
+        console.log();
+        console.log(c.dim("Stopped watching."));
+      }
       process.exit(0);
     });
   });

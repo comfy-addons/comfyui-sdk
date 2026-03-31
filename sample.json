@@ -3,7 +3,7 @@
     "inputs": {
       "seed": 1108860874231405,
       "steps": 20,
-      "cfg": 4,
+      "cfg": 7,
       "sampler_name": "euler",
       "scheduler": "normal",
       "denoise": 1,
@@ -40,8 +40,8 @@
   },
   "5": {
     "inputs": {
-      "width": 1024,
-      "height": 1024,
+      "width": 768,
+      "height": 768,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -51,7 +51,7 @@
   },
   "6": {
     "inputs": {
-      "text": "A anime picture of Miku wearing sexy dress on the jungle, holding a light saber",
+      "text": "A anime picture of cat girl, wearing sexy jacket, smiling, close body shot",
       "clip": [
         "4",
         1

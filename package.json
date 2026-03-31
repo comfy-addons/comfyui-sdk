@@ -51,6 +51,7 @@
     "comfyui-sdk"
   ],
   "dependencies": {
+    "@mariozechner/pi-tui": "^0.64.0",
     "ws": "^8.20.0"
   },
   "scripts": {

@@ -1,6 +1,6 @@
 import { parseArgs, USAGE_TEXT } from "cli/args";
 import { runWorkflow, buildResultOverrides, extractMediaFromOutputs } from "cli/runner";
-import { createRenderer } from "cli/renderer/index";
+import { createRenderer, resolveMode } from "cli/renderer/index";
 import type { RunResult } from "cli/renderer/json";
 import { buildInspectData, renderInspect } from "cli/commands/inspect";
 import { listResources, isValidResource } from "cli/commands/list";
@@ -61,8 +61,8 @@ async function cmdRun(args: ReturnType<typeof parseArgs>): Promise<void> {
     return;
   }
 
-  const mode = args.json ? "json" : args.quiet ? "quiet" : "terminal";
-  const renderer = createRenderer(mode, args.host, args.file);
+  const mode = resolveMode(args.json, args.quiet);
+  const renderer = createRenderer(mode, args.host, args.file, false, args.noTui);
 
   const startTime = performance.now();
   let exitCode = 0;
@@ -181,17 +181,20 @@ async function cmdWatch(args: ReturnType<typeof parseArgs>): Promise<void> {
     return;
   }
 
-  await watchMode({
-    file: args.file,
-    inputs: args.inputs,
-    host: args.host,
-    timeout: args.timeout,
-    output: args.output,
-    download: args.download,
-    noDownload: args.noDownload,
-    token: args.token,
-    user: args.user,
-    pass: args.pass,
-    outputNodes: args.outputNodes
-  });
+  await watchMode(
+    {
+      file: args.file,
+      inputs: args.inputs,
+      host: args.host,
+      timeout: args.timeout,
+      output: args.output,
+      download: args.download,
+      noDownload: args.noDownload,
+      token: args.token,
+      user: args.user,
+      pass: args.pass,
+      outputNodes: args.outputNodes
+    },
+    args.noTui
+  );
 }

@@ -9,6 +9,7 @@ export interface ParsedArgs {
   output: string;
   json: boolean;
   quiet: boolean;
+  noTui: boolean;
   download: boolean;
   noDownload: boolean;
   version: boolean;
@@ -46,6 +47,7 @@ Options:
   -q, --quiet                 Suppress progress output
   -d, --download               Download output images
       --no-download            Skip downloading output images
+      --no-tui                 Use basic terminal output instead of TUI
       --token <token>         Bearer token for authentication
       --user <user>           Username for basic auth
       --pass <pass>           Password for basic auth
@@ -95,6 +97,7 @@ const BOOLEAN_FLAGS = [
   "-d",
   "--download",
   "--no-download",
+  "--no-tui",
   "-w",
   "--watch",
   "--interactive",
@@ -124,6 +127,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     output: "./output",
     json: false,
     quiet: false,
+    noTui: false,
     download: false,
     noDownload: false,
     version: false,
@@ -207,6 +211,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
       case "-q":
       case "--quiet":
         result.quiet = true;
+        i += 1;
+        break;
+      case "--no-tui":
+        result.noTui = true;
         i += 1;
         break;
       case "-d":
