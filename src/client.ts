@@ -1065,8 +1065,17 @@ export class ComfyApi extends EventTarget {
       this.socket.client.onmessage = (event) => {
         this.resetLastActivity();
         try {
-          if (event.data instanceof ArrayBuffer) {
-            const buffer = event.data;
+          if (event.data instanceof ArrayBuffer || event.data instanceof Buffer) {
+            let buffer: ArrayBuffer;
+            if (event.data instanceof Buffer) {
+              buffer = new ArrayBuffer(event.data.length);
+              const view = new Uint8Array(buffer);
+              for (let i = 0; i < event.data.length; i++) {
+                view[i] = event.data[i];
+              }
+            } else {
+              buffer = event.data;
+            }
             const view = new DataView(buffer);
             const eventType = view.getUint32(0);
             switch (eventType) {
