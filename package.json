@@ -6,7 +6,7 @@
   "typings": "build/index.d.ts",
   "type": "module",
   "bin": {
-    "cfli": "./dist/cli.js"
+    "cfli": "dist/cli.js"
   },
   "exports": {
     ".": {
