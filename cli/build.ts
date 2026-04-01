@@ -7,11 +7,12 @@ if (!fs.existsSync("./dist")) {
 
 const result = await Bun.build({
   entrypoints: ["./cli/bin.ts"],
-  target: "bun",
+  target: "node",
   format: "esm",
-  minify: true,
+  minify: false,
   outdir: "./dist",
-  naming: "cli.js"
+  naming: "cli.js",
+  external: ["sharp", "sixel"]
 });
 
 if (!result.success) {

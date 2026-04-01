@@ -876,7 +876,10 @@ export class ComfyApi extends EventTarget {
         /**
          * Set terminal subscription on initialization.
          */
-        this.setTerminalSubscription(this.listenTerminal);
+        this.setTerminalSubscription(this.listenTerminal).catch((e) => {
+          this.log("setTerminalSubscription", "Failed", e);
+          this.dispatchEvent(new CustomEvent("terminal_subscription_error", { detail: e as Error }));
+        });
       })
       .catch((e) => {
         this.log("init", "Failed", e);

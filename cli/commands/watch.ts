@@ -5,7 +5,7 @@ import { loadWorkflow, detectOutputNodes } from "cli/utils/fs";
 import { coerceValue, isValidNodePath } from "cli/utils/value-parser";
 import { extractMediaFromOutputs, buildResultOverrides, isFilePath } from "cli/runner";
 import { createRenderer, resolveMode } from "cli/renderer/index";
-import type { TuiRenderer } from "cli/renderer/tui";
+import type { InkTuiRenderer } from "cli/renderer/ink/ink-tui-renderer";
 import type { RunResult } from "cli/renderer/json";
 import type { RunConfig } from "cli/runner";
 
@@ -23,14 +23,20 @@ const DEBOUNCE_MS = 500;
 
 interface WatchState {
   runNumber: number;
-  abortController: AbortController | null;
   debounceTimer: Timer | null;
   running: boolean;
   client: ComfyApi | null;
 }
 
-function isTui(renderer: any): renderer is TuiRenderer {
+function isTui(renderer: any): renderer is InkTuiRenderer {
   return renderer && typeof renderer.showWatchStatus === "function";
+}
+
+export function buildWatchClientOptions(credentials: any, listenTerminal: boolean) {
+  return {
+    ...(credentials ? { credentials } : {}),
+    listenTerminal
+  };
 }
 
 export async function watchMode(config: RunConfig, noTui = false): Promise<void> {
@@ -40,7 +46,6 @@ export async function watchMode(config: RunConfig, noTui = false): Promise<void>
 
   const state: WatchState = {
     runNumber: 0,
-    abortController: null,
     debounceTimer: null,
     running: false,
     client: null
@@ -60,7 +65,9 @@ export async function watchMode(config: RunConfig, noTui = false): Promise<void>
     credentials = { type: "basic", username: config.user, password: config.pass };
   }
 
-  state.client = new ComfyApi(config.host, undefined, credentials ? { credentials } : undefined);
+  state.client = new ComfyApi(config.host, undefined, buildWatchClientOptions(credentials, useTui));
+
+  const detachTerminalStream = isTui(renderer) ? attachTerminalLogStream(state.client, renderer) : () => {};
 
   await state.client.init(5, 2000).waitForReady();
   if (isTui(renderer)) {
@@ -71,6 +78,7 @@ export async function watchMode(config: RunConfig, noTui = false): Promise<void>
   }
 
   const runOnce = async () => {
+    state.running = true;
     state.runNumber++;
     const runNum = state.runNumber;
     const startTime = performance.now();
@@ -78,6 +86,9 @@ export async function watchMode(config: RunConfig, noTui = false): Promise<void>
 
     if (isTui(renderer)) {
       renderer.resetRun();
+      renderer.startRun(runNum);
+    } else if (!config.json) {
+      console.log(c.dim(`[Run #${runNum}]`) + ` ${c.cyan("starting")} ${config.file}`);
     }
 
     try {
@@ -131,11 +142,13 @@ export async function watchMode(config: RunConfig, noTui = false): Promise<void>
         };
         renderer.render(runResult);
       }
+    } finally {
+      state.running = false;
     }
 
     if (!interrupted && !isTui(renderer) && !config.json) {
       console.log();
-      console.log(c.dim(`${c.blue("watching")} ${config.file} ...`));
+      console.log(c.dim(`${c.blue("watching")} ${config.file} for changes ...`));
     }
   };
 
@@ -186,9 +199,7 @@ export async function watchMode(config: RunConfig, noTui = false): Promise<void>
         }
       }
 
-      state.running = true;
       await runOnce();
-      state.running = false;
     }, DEBOUNCE_MS);
   });
 
@@ -196,6 +207,7 @@ export async function watchMode(config: RunConfig, noTui = false): Promise<void>
     process.on("SIGINT", () => {
       if (state.debounceTimer) clearTimeout(state.debounceTimer);
       watcher.close();
+      detachTerminalStream();
       state.client!.destroy();
       if (isTui(renderer)) {
         renderer.stop();
@@ -239,11 +251,7 @@ async function executeWorkflow(client: ComfyApi, config: RunConfig, renderer: an
     .onProgress((info: any) => renderer.onProgress(info))
     .onOutput((key: any, data: any) => renderer.onOutput(String(key), data))
     .onFinished((_data: any) => {})
-    .onFailed((err: Error) => {
-      if (!err.message.includes("interrupted") && !err.message.includes("Interrupted")) {
-        renderer.onFailed(err);
-      }
-    });
+    .onFailed((_err: Error) => {});
 
   const result = await Promise.race([
     callWrapper.run(),
@@ -257,4 +265,31 @@ async function executeWorkflow(client: ComfyApi, config: RunConfig, renderer: an
   }
 
   return result;
+}
+
+export function attachTerminalLogStream(
+  client: Pick<ComfyApi, "addEventListener" | "removeEventListener">,
+  renderer: Pick<InkTuiRenderer, "addServerLog" | "showWatchStatus">
+): () => void {
+  let warned = false;
+
+  const onTerminal = (event: Event) => {
+    const detail = (event as CustomEvent<{ m: string; t: string } | null>).detail;
+    if (!detail?.m) return;
+    renderer.addServerLog(detail.m);
+  };
+
+  const onSubscriptionError = () => {
+    if (warned) return;
+    warned = true;
+    renderer.showWatchStatus("Live terminal logs unavailable; continuing with progress updates.");
+  };
+
+  client.addEventListener("terminal", onTerminal as EventListener);
+  client.addEventListener("terminal_subscription_error", onSubscriptionError as EventListener);
+
+  return () => {
+    client.removeEventListener("terminal", onTerminal as EventListener);
+    client.removeEventListener("terminal_subscription_error", onSubscriptionError as EventListener);
+  };
 }

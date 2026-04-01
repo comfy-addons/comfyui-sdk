@@ -1,13 +1,13 @@
 import { TerminalRenderer } from "cli/renderer/terminal";
 import { JsonRenderer } from "cli/renderer/json";
 import { QuietRenderer } from "cli/renderer/quiet";
-import { TuiRenderer, isTuiAvailable } from "cli/renderer/tui";
+import { InkTuiRenderer, isInkAvailable } from "cli/renderer/ink/ink-tui-renderer";
 
-export { isTuiAvailable } from "cli/renderer/tui";
+export { isInkAvailable } from "cli/renderer/ink/ink-tui-renderer";
 export type { TerminalRenderer } from "cli/renderer/terminal";
 export type { JsonRenderer } from "cli/renderer/json";
 export type { QuietRenderer } from "cli/renderer/quiet";
-export type { TuiRenderer } from "cli/renderer/tui";
+export type { InkTuiRenderer } from "cli/renderer/ink/ink-tui-renderer";
 export type { RunResult } from "cli/renderer/json";
 
 export type RenderMode = "json" | "terminal" | "quiet";
@@ -25,9 +25,9 @@ export function createRenderer(
   persistent = false,
   noTui = false,
   useTui = false
-): TerminalRenderer | JsonRenderer | QuietRenderer | TuiRenderer {
-  if (useTui && mode === "terminal" && !noTui && isTuiAvailable()) {
-    return new TuiRenderer(host, file, persistent);
+): TerminalRenderer | JsonRenderer | QuietRenderer | InkTuiRenderer {
+  if (useTui && mode === "terminal" && !noTui && isInkAvailable()) {
+    return new InkTuiRenderer(host, file, persistent);
   }
   switch (mode) {
     case "json":

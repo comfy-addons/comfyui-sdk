@@ -1,6 +1,7 @@
 import type { NodeProgress } from "src/types/api";
 import { formatProgressBar } from "cli/utils/progress";
 import type { RunResult } from "cli/renderer/json";
+import { parseMediaReference } from "cli/runner";
 
 const c = {
   green: (s: string) => `\x1b[32m${s}\x1b[0m`,
@@ -30,7 +31,7 @@ export class TerminalRenderer {
   }
 
   onPending(promptId: string): void {
-    console.log(c.yellow("Queued") + `: ${promptId}`);
+    console.log(c.yellow("Queued") + ` prompt ${promptId}`);
   }
 
   onProgress(info: NodeProgress): void {
@@ -70,15 +71,18 @@ export class TerminalRenderer {
     if (result.outputs) {
       const keys = Object.keys(result.outputs);
       if (keys.length > 0) {
-        console.log(c.dim("Outputs:") + " " + keys.map((k) => c.cyan(k)).join(", "));
+        console.log(c.dim("Results"));
+        for (const key of keys) {
+          console.log(`  ${c.green("output")} ${c.cyan(key)}`);
+        }
       }
     }
 
     if (result._media && Object.keys(result._media).length > 0) {
-      console.log(c.dim("Media:"));
+      console.log(c.dim("Images"));
       for (const [filename, url] of Object.entries(result._media)) {
-        const displayUrl = url.includes(" -> ") ? url : url;
-        console.log(`  ${c.blue(filename)}: ${displayUrl}`);
+        const parsed = parseMediaReference(url);
+        console.log(`  ${c.blue(filename)}: ${parsed.localPath ?? parsed.url}`);
       }
     }
   }

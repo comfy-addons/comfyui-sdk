@@ -1,7 +1,20 @@
-import { describe, it, expect } from "bun:test";
-import { buildResultOverrides, runWorkflow, type RunConfig, type RunCallbacks } from "cli/runner";
+import { afterEach, describe, it, expect } from "bun:test";
+import { buildResultOverrides, extractMediaFromOutputs, runWorkflow, type RunConfig, type RunCallbacks } from "cli/runner";
 import { getTestHost } from "../fixtures";
 import { resolve } from "path";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "fs";
+import { join } from "path";
+
+const ORIGINAL_FETCH = globalThis.fetch;
+const TEMP_DIRS: string[] = [];
+
+afterEach(() => {
+  globalThis.fetch = ORIGINAL_FETCH;
+  while (TEMP_DIRS.length > 0) {
+    const dir = TEMP_DIRS.pop();
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("RunConfig type", () => {
   it("should be exportable as a type", () => {
@@ -39,6 +52,68 @@ describe("buildResultOverrides", () => {
     expect(result["3.inputs.seed"]).toBe("42");
     expect(result["4.inputs.ckpt_name"]).toBe("model.safetensors");
     expect(result["5.inputs.width"]).toBe("1024");
+  });
+});
+
+describe("extractMediaFromOutputs", () => {
+  it("should save multiple file-target images as output.png, output2.png, output3.png", async () => {
+    const dir = mkdtempSync(join(process.cwd(), "tmp-media-"));
+    TEMP_DIRS.push(dir);
+    const outputPath = join(dir, "output.png");
+
+    globalThis.fetch = async () =>
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "content-type": "image/png" }
+      }) as Response;
+
+    const media = await extractMediaFromOutputs(
+      "http://localhost:8188",
+      {
+        nodeA: {
+          images: [
+            { filename: "a.png", type: "output", subfolder: "" },
+            { filename: "b.png", type: "output", subfolder: "" },
+            { filename: "c.png", type: "output", subfolder: "" }
+          ]
+        }
+      },
+      outputPath
+    );
+
+    expect(Object.keys(media)).toEqual(["output.png", "output2.png", "output3.png"]);
+    expect(existsSync(join(dir, "output.png"))).toBe(true);
+    expect(existsSync(join(dir, "output2.png"))).toBe(true);
+    expect(existsSync(join(dir, "output3.png"))).toBe(true);
+    expect(readFileSync(join(dir, "output2.png"))).toEqual(Buffer.from([1, 2, 3]));
+  });
+
+  it("should keep duplicate saved images distinct for the gallery", async () => {
+    const dir = mkdtempSync(join(process.cwd(), "tmp-media-"));
+    TEMP_DIRS.push(dir);
+
+    globalThis.fetch = async () =>
+      new Response(new Uint8Array([4, 5, 6]), {
+        status: 200,
+        headers: { "content-type": "image/png" }
+      }) as Response;
+
+    const media = await extractMediaFromOutputs(
+      "http://localhost:8188",
+      {
+        nodeA: {
+          images: [
+            { filename: "preview.png", type: "output", subfolder: "a" },
+            { filename: "preview.png", type: "output", subfolder: "b" }
+          ]
+        }
+      },
+      dir
+    );
+
+    expect(Object.keys(media)).toEqual(["preview.png", "preview2.png"]);
+    expect(existsSync(join(dir, "preview.png"))).toBe(true);
+    expect(existsSync(join(dir, "preview2.png"))).toBe(true);
   });
 });
 

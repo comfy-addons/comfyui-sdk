@@ -17,6 +17,19 @@ function getTargetExt(output: string): string {
   return extname(output).toLowerCase();
 }
 
+function withNumericSuffix(path: string, index: number): string {
+  if (index <= 0) return path;
+  const extension = extname(path);
+  const base = path.slice(0, extension ? -extension.length : undefined);
+  return `${base}${index + 1}${extension}`;
+}
+
+function makeUniqueKey(base: string, used: Map<string, number>): string {
+  const count = used.get(base) ?? 0;
+  used.set(base, count + 1);
+  return count === 0 ? base : `${base} (${count + 1})`;
+}
+
 export interface RunConfig {
   file: string;
   inputs: Array<{ key: string; value: string }>;
@@ -25,6 +38,8 @@ export interface RunConfig {
   output: string;
   download: boolean;
   noDownload: boolean;
+  json?: boolean;
+  quiet?: boolean;
   token?: string;
   user?: string;
   pass?: string;
@@ -37,12 +52,26 @@ export interface MediaEntry {
   local_path?: string;
 }
 
+export function parseMediaReference(reference: string): { url: string; localPath: string | null } {
+  const arrow = reference.indexOf(" -> ");
+  if (arrow === -1) {
+    return { url: reference, localPath: null };
+  }
+
+  return {
+    url: reference.slice(0, arrow),
+    localPath: reference.slice(arrow + 4)
+  };
+}
+
 export async function extractMediaFromOutputs(
   host: string,
   outputs: Record<string, any>,
   outputPath: string | null
 ): Promise<Record<string, string>> {
   const media: Record<string, string> = {};
+  const usedLabels = new Map<string, number>();
+  const savedFileCounts = new Map<string, number>();
 
   function findImages(obj: any): ImageInfo[] {
     if (!obj || typeof obj !== "object") return [];
@@ -67,7 +96,9 @@ export async function extractMediaFromOutputs(
 
     const baseUrl = host.replace(/\/+$/, "");
     const url = `${baseUrl}/view?${params}`;
-    media[img.filename] = url;
+    const defaultLabel = img.subfolder ? `${img.subfolder}/${img.filename}` : img.filename;
+    let label = defaultLabel;
+    let reference = url;
 
     if (outputPath) {
       try {
@@ -77,30 +108,38 @@ export async function extractMediaFromOutputs(
           const imgExt = extname(img.filename).toLowerCase();
           if (imgExt !== targetExt) continue;
 
-          if (media[img.filename].includes(" -> ")) continue;
-
           const dir = dirname(outputPath);
           mkdirSync(dir, { recursive: true });
-
-          const res = await fetch(url);
-          if (res.ok) {
-            const buf = await res.arrayBuffer();
-            writeFileSync(outputPath, new Uint8Array(buf));
-            media[img.filename] = `${url} -> ${outputPath}`;
-          }
-        } else {
-          mkdirSync(outputPath, { recursive: true });
-          const localPath = resolve(outputPath, basename(img.filename));
+          const saveIndex = savedFileCounts.get(outputPath) ?? 0;
+          const localPath = withNumericSuffix(outputPath, saveIndex);
 
           const res = await fetch(url);
           if (res.ok) {
             const buf = await res.arrayBuffer();
             writeFileSync(localPath, new Uint8Array(buf));
-            media[img.filename] = `${url} -> ${localPath}`;
+            savedFileCounts.set(outputPath, saveIndex + 1);
+            label = basename(localPath);
+            reference = `${url} -> ${localPath}`;
+          }
+        } else {
+          mkdirSync(outputPath, { recursive: true });
+          const baseLocalPath = resolve(outputPath, basename(img.filename));
+          const saveIndex = savedFileCounts.get(baseLocalPath) ?? 0;
+          const localPath = withNumericSuffix(baseLocalPath, saveIndex);
+
+          const res = await fetch(url);
+          if (res.ok) {
+            const buf = await res.arrayBuffer();
+            writeFileSync(localPath, new Uint8Array(buf));
+            savedFileCounts.set(baseLocalPath, saveIndex + 1);
+            label = basename(localPath);
+            reference = `${url} -> ${localPath}`;
           }
         }
       } catch {}
     }
+
+    media[makeUniqueKey(label, usedLabels)] = reference;
   }
 
   return media;

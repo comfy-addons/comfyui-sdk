@@ -40,8 +40,8 @@
   },
   "5": {
     "inputs": {
-      "width": 768,
-      "height": 768,
+      "width": 1024,
+      "height": 512,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -51,7 +51,7 @@
   },
   "6": {
     "inputs": {
-      "text": "A anime picture of cat girl, wearing sexy jacket, smiling, close body shot",
+      "text": "A anime picture of cat, holding a sign with text `STF`",
       "clip": [
         "4",
         1

@@ -66,6 +66,7 @@ export type TEventKey =
   | "connected"
   | "log"
   | "terminal"
+  | "terminal_subscription_error"
   | "reconnecting"
   | "b_preview";
 
@@ -83,6 +84,7 @@ export type TComfyAPIEventMap = {
   b_preview: CustomEvent<Blob>;
   log: CustomEvent<{ msg: string; data: any }>;
   terminal: CustomEvent<{ m: string; t: string }>;
+  terminal_subscription_error: CustomEvent<Error>;
   execution_start: CustomEvent<TExecution>;
   executing: CustomEvent<TExecuting>;
   progress: CustomEvent<TProgress>;
