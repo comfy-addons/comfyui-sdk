@@ -3,6 +3,7 @@ import { NodeDef, NodeDefsResponse } from "./types/api";
 export interface GenerateWorkflowCodeOptions {
   sdkImportPath?: string;
   className?: string;
+  enumOverrides?: Record<string, string[]>;
 }
 
 const TS_KEYWORDS = new Set<string>([
@@ -129,14 +130,25 @@ function enumType(values: unknown[]): string {
   return asStrings.map((value) => JSON.stringify(value)).join(" | ");
 }
 
-function inputType(inputDef: unknown): string {
+function inputType(inputDef: unknown, enumOverride?: string[]): string {
   if (!Array.isArray(inputDef) || inputDef.length === 0) {
     return "unknown";
+  }
+
+  if (Array.isArray(enumOverride) && enumOverride.length > 0) {
+    return enumType(enumOverride);
   }
 
   const head = inputDef[0];
   if (Array.isArray(head)) {
     return enumType(head);
+  }
+  if (head === "COMBO") {
+    const config = inputDef[1];
+    if (config && typeof config === "object" && Array.isArray((config as { options?: unknown[] }).options)) {
+      return enumType((config as { options: unknown[] }).options);
+    }
+    return "string";
   }
   if (head === "INT" || head === "FLOAT") {
     return "number";
@@ -181,7 +193,7 @@ function outputType(value: unknown): string {
   return `NodeRef<${typeParam}>`;
 }
 
-function buildInputLines(nodeDef: NodeDef): string[] {
+function buildInputLines(nodeName: string, nodeDef: NodeDef, options?: GenerateWorkflowCodeOptions): string[] {
   const required = nodeDef.input?.required ?? {};
   const optional = nodeDef.input?.optional ?? {};
   const requiredKeys = orderedKeys(required, nodeDef.input_order?.required);
@@ -189,25 +201,47 @@ function buildInputLines(nodeDef: NodeDef): string[] {
   const lines: string[] = [];
 
   for (const key of requiredKeys) {
-    lines.push(`  ${quoteKey(key)}: ${inputType(required[key])};`);
+    const override = options?.enumOverrides?.[`${nodeName}.${key}`];
+    lines.push(`  ${quoteKey(key)}: ${inputType(required[key], override)};`);
   }
   for (const key of optionalKeys) {
-    lines.push(`  ${quoteKey(key)}?: ${inputType(optional[key])};`);
+    const override = options?.enumOverrides?.[`${nodeName}.${key}`];
+    lines.push(`  ${quoteKey(key)}?: ${inputType(optional[key], override)};`);
   }
 
   return lines;
 }
 
-function buildOutputLines(nodeDef: NodeDef): Array<{ key: string; type: string; index: number }> {
+function buildInputPathLines(nodeDef: NodeDef): Array<{ key: string; path: string }> {
+  const required = nodeDef.input?.required ?? {};
+  const optional = nodeDef.input?.optional ?? {};
+  const requiredKeys = orderedKeys(required, nodeDef.input_order?.required);
+  const optionalKeys = orderedKeys(optional, nodeDef.input_order?.optional);
+  const keys: string[] = [];
+  const seen = new Set<string>();
+
+  for (const key of [...requiredKeys, ...optionalKeys]) {
+    if (!seen.has(key)) {
+      seen.add(key);
+      keys.push(key);
+    }
+  }
+
+  return keys.map((key) => ({ key, path: `\${id}.inputs.${key}` }));
+}
+
+function buildOutputLines(nodeDef: NodeDef): Array<{ key: string; type: string; refTypeParam: string; index: number }> {
   const outputNames = Array.isArray(nodeDef.output_name) ? nodeDef.output_name : [];
   const outputs = Array.isArray(nodeDef.output) ? (nodeDef.output as unknown[]) : [];
   const max = Math.max(outputNames.length, outputs.length);
-  const lines: Array<{ key: string; type: string; index: number }> = [];
+  const lines: Array<{ key: string; type: string; refTypeParam: string; index: number }> = [];
 
   for (let index = 0; index < max; index += 1) {
+    const outputValue = outputs[index];
     lines.push({
       key: outputNames[index] || `OUTPUT_${index}`,
-      type: outputType(outputs[index]),
+      type: outputType(outputValue),
+      refTypeParam: nodeRefTypeParam(outputValue),
       index
     });
   }
@@ -227,8 +261,10 @@ export function generateWorkflowCode(nodeDefs: NodeDefsResponse, options?: Gener
     const nodeDef = nodeDefs[key];
     const safeName = uniqueName(toPascalCase(key), usedNames);
     const inputInterfaceName = `${safeName}Inputs`;
+    const inputPathsInterfaceName = `${safeName}InputPaths`;
     const outputInterfaceName = `${safeName}Outputs`;
-    const inputLines = buildInputLines(nodeDef);
+    const inputLines = buildInputLines(key, nodeDef, options);
+    const inputPathLines = buildInputPathLines(nodeDef);
     const outputLines = buildOutputLines(nodeDef);
 
     interfaces.push(`export interface ${inputInterfaceName} {`);
@@ -238,6 +274,13 @@ export function generateWorkflowCode(nodeDefs: NodeDefsResponse, options?: Gener
       interfaces.push(...inputLines);
       interfaces.push(`}`);
     }
+    interfaces.push("");
+
+    interfaces.push(`export interface ${inputPathsInterfaceName} {`);
+    for (const inputPathLine of inputPathLines) {
+      interfaces.push(`  ${quoteKey(inputPathLine.key)}: string;`);
+    }
+    interfaces.push(`}`);
     interfaces.push("");
 
     if (outputLines.length > 0) {
@@ -250,8 +293,8 @@ export function generateWorkflowCode(nodeDefs: NodeDefsResponse, options?: Gener
     }
 
     const methodHeader = outputLines.length
-      ? `  ${safeName}(inputs: ${inputInterfaceName}${inputLines.length === 0 ? " = {}" : ""}): ${outputInterfaceName} & { __id: string } {`
-      : `  ${safeName}(inputs: ${inputInterfaceName}${inputLines.length === 0 ? " = {}" : ""}): { __id: string } {`;
+      ? `  ${safeName}(inputs: ${inputInterfaceName}${inputLines.length === 0 ? " = {}" : ""}): ${outputInterfaceName} & { __id: string; inputs: ${inputPathsInterfaceName} } {`
+      : `  ${safeName}(inputs: ${inputInterfaceName}${inputLines.length === 0 ? " = {}" : ""}): { __id: string; inputs: ${inputPathsInterfaceName} } {`;
 
     if (safeName === key) {
       methods.push(methodHeader);
@@ -260,17 +303,23 @@ export function generateWorkflowCode(nodeDefs: NodeDefsResponse, options?: Gener
       methods.push(methodHeader);
     }
     methods.push(`    const id = this.addNode(${JSON.stringify(key)}, inputs);`);
+    methods.push("    const inputPaths = {");
+    for (const inputPathLine of inputPathLines) {
+      methods.push(`      ${quoteKey(inputPathLine.key)}: \`${inputPathLine.path}\`,`);
+    }
+    methods.push("    };");
     if (outputLines.length > 0) {
       methods.push("    return {");
       for (const output of outputLines) {
         methods.push(
-          `      ${quoteKey(output.key)}: this.makeRef<${nodeRefTypeParam(nodeDef.output[output.index])}>(id, ${output.index}),`
+          `      ${quoteKey(output.key)}: this.makeRef<${output.refTypeParam}>(id, ${output.index}),`
         );
       }
-      methods.push("      __id: id");
+      methods.push("      __id: id,");
+      methods.push("      inputs: inputPaths");
       methods.push("    };");
     } else {
-      methods.push("    return { __id: id };");
+      methods.push("    return { __id: id, inputs: inputPaths };");
     }
     methods.push("  }");
     methods.push("");

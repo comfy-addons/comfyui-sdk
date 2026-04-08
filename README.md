@@ -256,7 +256,7 @@ const vae = wf.VAEDecode({ samples: smp.LATENT, vae: ckpt.VAE });
 const save = wf.SaveImage({ images: vae.IMAGE, filename_prefix: "output" });
 
 const builder = wf.build({
-  inputs: { seed: "5.inputs.seed" },
+  inputs: { seed: smp.inputs.seed },
   outputs: { images: save.__id }
 });
 
@@ -267,6 +267,7 @@ await new CallWrapper(api, builder).run();
 
 - Generate once per server setup/version: `cfli codegen -H <host> -o ./src/comfyui/nodes.ts`.
 - Build workflows directly in TypeScript instead of hand-editing workflow JSON.
+- Use generated input path metadata like `smp.inputs.seed` to avoid hard-coded node path strings.
 - `NodeRef` typing prevents mismatched node output/input wiring at compile time.
 
 ### 🔄 Managing Multiple Instances with `ComfyPool`

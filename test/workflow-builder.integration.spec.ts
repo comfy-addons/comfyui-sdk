@@ -82,7 +82,7 @@ describe.skipIf(!getTestHost())("WorkflowBuilder Generated Integration", () => {
     const save = wf.SaveImage({ images: vae.IMAGE, filename_prefix: "output" });
 
     const builder = wf.build({
-      inputs: { seed: "5.inputs.seed" },
+      inputs: { seed: smp.inputs.seed },
       outputs: { images: save.__id }
     });
 
