@@ -30,6 +30,18 @@ describe("parseArgs subcommands", () => {
     expect(result.promptId).toBe("abc-123-def");
   });
 
+  it("should parse 'codegen' subcommand with default output file", () => {
+    const result = parseArgs(["codegen"]);
+    expect(result.subcommand).toBe("codegen");
+    expect(result.output).toBe("./comfyui-nodes.ts");
+  });
+
+  it("should parse 'codegen' subcommand with custom output", () => {
+    const result = parseArgs(["codegen", "-o", "./my-nodes.ts"]);
+    expect(result.subcommand).toBe("codegen");
+    expect(result.output).toBe("./my-nodes.ts");
+  });
+
   it("should parse 'run' subcommand explicitly", () => {
     const result = parseArgs(["run", "-f", "workflow.json"]);
     expect(result.subcommand).toBe("run");

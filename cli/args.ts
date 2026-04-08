@@ -1,4 +1,4 @@
-export type Subcommand = "run" | "inspect" | "list" | "download" | "queue";
+export type Subcommand = "run" | "inspect" | "list" | "download" | "queue" | "codegen";
 
 export interface ParsedArgs {
   subcommand: Subcommand;
@@ -35,6 +35,7 @@ Commands:
   list <resource>               List server resources (checkpoints|loras|embeddings|samplers)
   queue                         Show server queue status
   download <prompt_id>          Re-download outputs from a previous run
+  codegen [options]             Generate typed WorkflowBuilder from server node defs
 
 Options:
   -f, --file <path>           Workflow JSON file to execute
@@ -42,7 +43,7 @@ Options:
   -p, --prompt <key=value>    Alias for --input
   -H, --host <url>            ComfyUI server URL (default: http://localhost:8188)
   -t, --timeout <ms>          Execution timeout in ms (default: 120000)
-  -o, --output <dir>          Output directory (default: ./output)
+  -o, --output <path>         Output path (default: ./output, or ./comfyui-nodes.ts for codegen)
   -j, --json                  Output results as JSON
   -q, --quiet                 Suppress progress output
   -d, --download               Download output images
@@ -64,6 +65,7 @@ Examples:
   cfli list checkpoints
   cfli queue
   cfli download abc-123-def
+  cfli codegen -H http://localhost:8188 -o ./my-nodes.ts
   cfli -f workflow.json --host http://192.168.1.100:8188 --json --quiet
   cfli -f workflow.json --output-nodes 9,12 --download
   cfli -f workflow.json -i 6.inputs.text="cat" --watch
@@ -117,7 +119,7 @@ function requireValue(flag: string, args: string[], i: number): string {
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
-  const SUBCOMMANDS = new Set<string>(["run", "inspect", "list", "download", "queue"]);
+  const SUBCOMMANDS = new Set<string>(["run", "inspect", "list", "download", "queue", "codegen"]);
 
   const result: ParsedArgs = {
     subcommand: "run",
@@ -136,6 +138,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     interactive: false
   };
 
+  let outputSet = false;
   let i = 0;
   while (i < argv.length) {
     const arg = argv[i];
@@ -201,6 +204,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       case "-o":
       case "--output":
         result.output = requireValue(arg, argv, i);
+        outputSet = true;
         i += 2;
         break;
       case "-j":
@@ -278,6 +282,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
       default:
         i += 1;
     }
+  }
+
+  if (result.subcommand === "codegen" && !outputSet) {
+    result.output = "./comfyui-nodes.ts";
   }
 
   return result;

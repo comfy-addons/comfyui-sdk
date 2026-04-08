@@ -7,8 +7,9 @@ import { listResources, isValidResource } from "cli/commands/list";
 import { downloadOutputs } from "cli/commands/download";
 import { showQueue } from "cli/commands/queue";
 import { watchMode } from "cli/commands/watch";
+import { codegenWorkflowBuilder } from "cli/commands/codegen";
 
-const VERSION = "0.2.50";
+const VERSION = "0.3.0";
 
 import { isFilePath } from "cli/runner";
 
@@ -45,6 +46,8 @@ export async function main(): Promise<void> {
       return cmdQueue(args);
     case "download":
       return cmdDownload(args);
+    case "codegen":
+      return cmdCodegen(args);
     case "run":
     default:
       if (args.watch) {
@@ -174,6 +177,10 @@ async function cmdDownload(args: ReturnType<typeof parseArgs>): Promise<void> {
   }
 
   await downloadOutputs(args.host, args.promptId, args.output, args.json, args.token, args.user, args.pass);
+}
+
+async function cmdCodegen(args: ReturnType<typeof parseArgs>): Promise<void> {
+  await codegenWorkflowBuilder(args.host, args.output, args.json, args.token, args.user, args.pass);
 }
 
 async function cmdWatch(args: ReturnType<typeof parseArgs>): Promise<void> {

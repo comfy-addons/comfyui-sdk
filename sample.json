@@ -40,7 +40,7 @@
   },
   "5": {
     "inputs": {
-      "width": 1024,
+      "width": 512,
       "height": 512,
       "batch_size": 1
     },
@@ -51,7 +51,7 @@
   },
   "6": {
     "inputs": {
-      "text": "A anime picture of cat, holding a sign with text `STF`",
+      "text": "A anime picture of cat, holding a sign with text Hello World",
       "clip": [
         "4",
         1

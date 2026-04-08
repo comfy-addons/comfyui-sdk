@@ -15,16 +15,19 @@ A robust and meticulously crafted TypeScript SDK 🚀 for seamless interaction w
   - [Install](#install)
   - [Quick Start](#quick-start)
   - [Flags](#flags)
+  - [Codegen Typed Workflow Builder](#codegen-typed-workflow-builder)
   - [Output Format](#output-format)
   - [Downloading Media](#downloading-media)
 - [🚀 Getting Started 🚀](#-getting-started-)
   - [🎬 Basic Usage](#-basic-usage)
+  - [🧠 Type-Safe Workflow Builder (Generated)](#-type-safe-workflow-builder-generated)
   - [🔄 Managing Multiple Instances with `ComfyPool`](#-managing-multiple-instances-with-comfypool)
   - [🔑 Authentication](#-authentication)
 - [📚 API Reference 📚](#-api-reference-)
   - [`ComfyApi`](#comfyapi)
   - [`CallWrapper`](#callwrapper)
   - [`PromptBuilder`](#promptbuilder)
+  - [`WorkflowBuilder` and `NodeRef`](#workflowbuilder-and-noderef)
   - [`ComfyPool`](#comfypool)
   - [🗂️ Enums](#-enums)
   - [🗄️ Types](#-types)
@@ -37,6 +40,7 @@ A robust and meticulously crafted TypeScript SDK 🚀 for seamless interaction w
 
 - **💎 TypeScript Powered**: Enjoy a fully typed codebase, ensuring enhanced development, maintainability, and type safety. 🛡️
 - **🏗️ Workflow Builder**: Construct and manipulate intricate ComfyUI workflows effortlessly using a fluent, intuitive builder pattern. 🧩
+- **🧠 Typed Codegen Builder**: Generate a fully typed `WorkflowBuilder` from your live ComfyUI server and build workflows with autocomplete. ✨
 - **🤹 Multi-Instance Management**: Handle a pool of ComfyUI instances with ease, employing flexible queueing strategies for optimal resource utilization. 🌐
 - **⚡ Real-Time Updates**: Subscribe to WebSocket events for live progress tracking, image previews, and error notifications. 🔔
 - **🔧 Custom WebSocket Support**: Supply your own WebSocket implementation for greater flexibility in different environments, with robust reconnection handling and fallback options. 🔄
@@ -92,7 +96,7 @@ cfli -f workflow.json \
 | `-p, --prompt <key=value>`    |       | Alias for `--input`                                                      |
 | `-H, --host <url>`            |       | ComfyUI server URL (default: `$COMFYUI_HOST` or `http://localhost:8188`) |
 | `-t, --timeout <ms>`          |       | Execution timeout (default: `120000`)                                    |
-| `-o, --output <dir>`          |       | Output directory for downloads (default: `./output`)                     |
+| `-o, --output <path>`         |       | Output path (default: `./output`, or `./comfyui-nodes.ts` for `codegen`) |
 | `-j, --json`                  |       | Output results as JSON                                                   |
 | `-q, --quiet`                 |       | Suppress progress output                                                 |
 | `-d, --download`              |       | Download output images to `-o` directory                                 |
@@ -102,6 +106,16 @@ cfli -f workflow.json \
 | `--output-nodes <id,id>`      |       | Comma-separated node IDs to capture output                               |
 | `-v, --version`               |       | Print version                                                            |
 | `-h, --help`                  |       | Show help                                                                |
+
+### Codegen Typed Workflow Builder
+
+Generate a typed `WorkflowBuilder` from your server node definitions:
+
+```bash
+cfli codegen -H http://localhost:8188 -o ./src/comfyui/nodes.ts
+```
+
+Then use it in your SDK code for type-safe node inputs/outputs with autocomplete.
 
 ### Output Format
 
@@ -209,6 +223,51 @@ new CallWrapper(api, workflow)
 - Use `PromptBuilder` to define the workflow structure and set input nodes.
 - Set specific input values, including the checkpoint path, seed, and prompt.
 - Execute the workflow and log the generated image URLs using the `CallWrapper`.
+
+### 🧠 Type-Safe Workflow Builder (Generated)
+
+Use the generated typed builder from `cfli codegen`:
+
+```typescript
+import { ComfyApi, CallWrapper } from "@saintno/comfyui-sdk";
+import { WorkflowBuilder } from "./comfyui/nodes";
+
+const api = new ComfyApi("http://localhost:8188");
+await api.init(5, 2000).waitForReady();
+
+const wf = new WorkflowBuilder();
+const ckpt = wf.CheckpointLoaderSimple({ ckpt_name: "v1-5-pruned.safetensors" });
+const pos = wf.CLIPTextEncode({ text: "landscape", clip: ckpt.CLIP });
+const neg = wf.CLIPTextEncode({ text: "ugly", clip: ckpt.CLIP });
+const lat = wf.EmptyLatentImage({ width: 512, height: 512, batch_size: 1 });
+const smp = wf.KSampler({
+  model: ckpt.MODEL,
+  positive: pos.CONDITIONING,
+  negative: neg.CONDITIONING,
+  latent_image: lat.LATENT,
+  seed: 42,
+  steps: 20,
+  cfg: 7,
+  sampler_name: "euler",
+  scheduler: "normal",
+  denoise: 1
+});
+const vae = wf.VAEDecode({ samples: smp.LATENT, vae: ckpt.VAE });
+const save = wf.SaveImage({ images: vae.IMAGE, filename_prefix: "output" });
+
+const builder = wf.build({
+  inputs: { seed: "5.inputs.seed" },
+  outputs: { images: save.__id }
+});
+
+await new CallWrapper(api, builder).run();
+```
+
+#### 🔍 Breakdown
+
+- Generate once per server setup/version: `cfli codegen -H <host> -o ./src/comfyui/nodes.ts`.
+- Build workflows directly in TypeScript instead of hand-editing workflow JSON.
+- `NodeRef` typing prevents mismatched node output/input wiring at compile time.
 
 ### 🔄 Managing Multiple Instances with `ComfyPool`
 
@@ -450,6 +509,20 @@ constructor(prompt: T, inputKeys: I[], outputKeys: O[])
 - `inputRaw<V = string | number | undefined>(key: string, value: V, encodeOs?: OSType)`: Sets a raw input value with dynamic key.
 - `get workflow`: Retrieves the workflow object.
 - `get caller`: Retrieves current `PromptBuilder` object.
+
+### `WorkflowBuilder` and `NodeRef`
+
+`WorkflowBuilder` is a base class for generated builders created by `cfli codegen`.
+
+- `NodeRef<T>`: A typed `[nodeId, outputIndex]` tuple used for connecting node outputs to node inputs.
+- `workflow`: Returns the assembled workflow JSON (`NodeData`) as a deep clone.
+- `build(config?)`: Returns a `PromptBuilder` mapped with optional dynamic `inputs` and `outputs`.
+
+Use this flow for best DX:
+
+1. Generate: `cfli codegen -H http://localhost:8188 -o ./src/comfyui/nodes.ts`
+2. Import generated `WorkflowBuilder` from your app.
+3. Compose nodes with full autocomplete and run via `CallWrapper`.
 
 ### `ComfyPool`
 
