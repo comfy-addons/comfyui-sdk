@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { CallWrapper } from "src/call-wrapper";
 import { NodeRef, WorkflowBuilder } from "src/workflow-builder";
 
 class TestWorkflowBuilder extends WorkflowBuilder {
@@ -50,5 +51,25 @@ describe("WorkflowBuilder", () => {
     expect(promptBuilder.mapOutputKeys.images).toBe("1");
     const next = promptBuilder.input("seed", 42);
     expect(next.prompt["1"].inputs.seed).toBe(42);
+  });
+
+  it("should infer typed CallWrapper output from OutputNodeId in build config", () => {
+    const builder = new WorkflowBuilder().build({
+      outputs: {
+        images:
+          "9" as import("src/workflow-builder").OutputNodeId<{
+            images: Array<{ filename: string; subfolder: string; type: string }>;
+          }>
+      }
+    });
+    const wrapper = new CallWrapper({} as any, builder);
+
+    const handler: Parameters<typeof wrapper.onFinished>[0] = (data) => {
+      const filename: string = data.images.images[0].filename;
+      void filename;
+    };
+
+    wrapper.onFinished(handler);
+    expect(typeof handler).toBe("function");
   });
 });

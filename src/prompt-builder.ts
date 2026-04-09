@@ -2,7 +2,12 @@ import { encodeNTPath, encodePosixPath } from "./tools";
 import { NodeData, OSType } from "./types/api";
 import { DeepKeys, Simplify } from "./types/tool";
 
-export class PromptBuilder<I extends string, O extends string, T extends NodeData> {
+export class PromptBuilder<
+  I extends string,
+  O extends string,
+  T extends NodeData,
+  R extends Partial<Record<O, unknown>> = Partial<Record<O, unknown>>
+> {
   prompt: T;
   mapInputKeys: Partial<Record<I, string | string[]>> = {};
   mapOutputKeys: Partial<Record<O, string>> = {};
@@ -24,8 +29,8 @@ export class PromptBuilder<I extends string, O extends string, T extends NodeDat
    *
    * @returns A new instance of the PromptBuilder.
    */
-  clone(): PromptBuilder<I, O, T> {
-    const newBuilder = new PromptBuilder<I, O, T>(
+  clone(): PromptBuilder<I, O, T, R> {
+    const newBuilder = new PromptBuilder<I, O, T, R>(
       this.prompt,
       Object.keys(this.mapInputKeys) as I[],
       Object.keys(this.mapOutputKeys) as O[]
@@ -41,14 +46,14 @@ export class PromptBuilder<I extends string, O extends string, T extends NodeDat
    *
    * @param node Node which will be bypassed.
    */
-  bypass(node: keyof T): PromptBuilder<I, O, T>;
+  bypass(node: keyof T): PromptBuilder<I, O, T, R>;
 
   /**
    * Marks multiple nodes to be bypassed at generation.
    *
    * @param nodes Array of nodes which will be bypassed.
    */
-  bypass(nodes: (keyof T)[]): PromptBuilder<I, O, T>;
+  bypass(nodes: (keyof T)[]): PromptBuilder<I, O, T, R>;
 
   bypass(nodes: keyof T | (keyof T)[]) {
     if (!Array.isArray(nodes)) {
@@ -64,14 +69,14 @@ export class PromptBuilder<I extends string, O extends string, T extends NodeDat
    *
    * @param node Node to reverse bypass on.
    */
-  reinstate(node: keyof T): PromptBuilder<I, O, T>;
+  reinstate(node: keyof T): PromptBuilder<I, O, T, R>;
 
   /**
    * Unmarks a collection of nodes from bypass at generation.
    *
    * @param nodes Array of nodes to reverse bypass on.
    */
-  reinstate(nodes: (keyof T)[]): PromptBuilder<I, O, T>;
+  reinstate(nodes: (keyof T)[]): PromptBuilder<I, O, T, R>;
 
   reinstate(nodes: keyof T | (keyof T)[]) {
     if (!Array.isArray(nodes)) {
@@ -202,7 +207,7 @@ export class PromptBuilder<I extends string, O extends string, T extends NodeDat
         current[keys[keys.length - 1]] = valueToSet;
       }
     }
-    return this as Simplify<PromptBuilder<I, O, T>>;
+    return this as Simplify<PromptBuilder<I, O, T, R>>;
   }
 
   /**
@@ -243,7 +248,7 @@ export class PromptBuilder<I extends string, O extends string, T extends NodeDat
         current[keys[keys.length - 1]] = valueToSet;
       }
     }
-    return this as Simplify<PromptBuilder<I, O, T>>;
+    return this as Simplify<PromptBuilder<I, O, T, R>>;
   }
 
   /**

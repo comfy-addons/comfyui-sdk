@@ -268,6 +268,7 @@ await new CallWrapper(api, builder).run();
 - Generate once per server setup/version: `cfli codegen -H <host> -o ./src/comfyui/nodes.ts`.
 - Build workflows directly in TypeScript instead of hand-editing workflow JSON.
 - Use generated input path metadata like `smp.inputs.seed` to avoid hard-coded node path strings.
+- `CallWrapper` infers named output payload types from generated `__id` handles (with safe fallback for unknown node outputs).
 - `NodeRef` typing prevents mismatched node output/input wiring at compile time.
 
 ### 🔄 Managing Multiple Instances with `ComfyPool`

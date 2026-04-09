@@ -135,7 +135,9 @@ describe("generateWorkflowCode", () => {
   it("should map ComfyUI node defs into typed WorkflowBuilder methods", () => {
     const code = generateWorkflowCode(MOCK_NODE_DEFS);
 
-    expect(code).toContain('import { WorkflowBuilder as BaseWorkflowBuilder, NodeRef } from "@saintno/comfyui-sdk";');
+    expect(code).toContain(
+      'import { WorkflowBuilder as BaseWorkflowBuilder, NodeRef, OutputNodeId, ComfyOutputValue, ComfyNodeOutput } from "@saintno/comfyui-sdk";'
+    );
     expect(code).toContain("export interface KSamplerInputs {");
     expect(code).toContain("  model: NodeRef<\"MODEL\">;");
     expect(code).toContain("  seed: number;");
@@ -146,8 +148,10 @@ describe("generateWorkflowCode", () => {
     expect(code).toContain("  seed: string;");
     expect(code).toContain("export interface KSamplerOutputs {");
     expect(code).toContain("  LATENT: NodeRef<\"LATENT\">;");
+    expect(code).toContain("export interface KSamplerResult extends ComfyNodeOutput {");
+    expect(code).toContain('  LATENT?: ComfyOutputValue<"LATENT">;');
     expect(code).toContain(
-      "KSampler(inputs: KSamplerInputs): KSamplerOutputs & { __id: string; inputs: KSamplerInputPaths }"
+      "KSampler(inputs: KSamplerInputs): KSamplerOutputs & { __id: OutputNodeId<KSamplerResult>; inputs: KSamplerInputPaths }"
     );
     expect(code).toContain("seed: `${id}.inputs.seed`,");
     expect(code).toContain("inputs: inputPaths");
@@ -161,10 +165,10 @@ describe("generateWorkflowCode", () => {
     expect(code).toContain('/** Node: "CR Multi-ControlNet Stack" */');
     expect(code).toContain('/** Node: "CR-Multi ControlNet Stack" */');
     expect(code).toContain(
-      "CRMultiControlNetStack(inputs: CRMultiControlNetStackInputs): CRMultiControlNetStackOutputs & { __id: string; inputs: CRMultiControlNetStackInputPaths }"
+      "CRMultiControlNetStack(inputs: CRMultiControlNetStackInputs): CRMultiControlNetStackOutputs & { __id: OutputNodeId<CRMultiControlNetStackResult>; inputs: CRMultiControlNetStackInputPaths }"
     );
     expect(code).toContain(
-      "CRMultiControlNetStack2(inputs: CRMultiControlNetStack2Inputs): CRMultiControlNetStack2Outputs & { __id: string; inputs: CRMultiControlNetStack2InputPaths }"
+      "CRMultiControlNetStack2(inputs: CRMultiControlNetStack2Inputs): CRMultiControlNetStack2Outputs & { __id: OutputNodeId<CRMultiControlNetStack2Result>; inputs: CRMultiControlNetStack2InputPaths }"
     );
     expect(code).toContain('"CONTROL NET": NodeRef<"CONTROL_NET">;');
     expect(code).toContain("  any_input: NodeRef;");
@@ -173,8 +177,10 @@ describe("generateWorkflowCode", () => {
   it("should return only __id for output nodes without outputs", () => {
     const code = generateWorkflowCode(MOCK_NODE_DEFS);
 
-    expect(code).toContain("SaveImage(inputs: SaveImageInputs): { __id: string; inputs: SaveImageInputPaths }");
-    expect(code).toContain("return { __id: id, inputs: inputPaths };");
+    expect(code).toContain("export interface SaveImageResult extends ComfyNodeOutput {");
+    expect(code).toContain('  images?: ComfyOutputValue<"IMAGE">;');
+    expect(code).toContain("SaveImage(inputs: SaveImageInputs): { __id: OutputNodeId<SaveImageResult>; inputs: SaveImageInputPaths }");
+    expect(code).toContain("return { __id: id as OutputNodeId<SaveImageResult>, inputs: inputPaths };");
   });
 
   it("should apply enumOverrides for empty clip combo inputs", () => {

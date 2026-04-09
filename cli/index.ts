@@ -9,7 +9,7 @@ import { showQueue } from "cli/commands/queue";
 import { watchMode } from "cli/commands/watch";
 import { codegenWorkflowBuilder } from "cli/commands/codegen";
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 
 import { isFilePath } from "cli/runner";
 

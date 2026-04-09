@@ -1,7 +1,22 @@
 import { PromptBuilder } from "./prompt-builder";
-import { NodeData } from "./types/api";
+import { ImageInfo, NodeData } from "./types/api";
 
 export type NodeRef<T extends string = string> = [string, number] & { __outputType?: T };
+export type ComfyNodeOutput = Record<string, unknown>;
+export type ComfyOutputValue<T extends string = string> = T extends "IMAGE"
+  ? ImageInfo[]
+  : T extends "INT" | "FLOAT"
+    ? number | number[]
+    : T extends "STRING"
+      ? string | string[]
+      : T extends "BOOLEAN"
+        ? boolean | boolean[]
+        : unknown;
+export type OutputNodeId<T extends ComfyNodeOutput = ComfyNodeOutput> = string & { __outputData?: T };
+
+type InferOutputValueMap<OM extends Record<string, string | OutputNodeId<any>>> = {
+  [K in keyof OM & string]: OM[K] extends OutputNodeId<infer T> ? T : ComfyNodeOutput;
+};
 
 export class WorkflowBuilder {
   private _nodes: NodeData = {};
@@ -25,21 +40,28 @@ export class WorkflowBuilder {
     return structuredClone(this._nodes);
   }
 
-  build<I extends string = never, O extends string = never>(config?: {
+  build<
+    I extends string = never,
+    OM extends Record<string, string | OutputNodeId<any>> = Record<never, never>
+  >(config?: {
     inputs?: Record<I, string | string[]>;
-    outputs?: Record<O, string>;
-  }): PromptBuilder<I, O, NodeData> {
+    outputs?: OM;
+  }): PromptBuilder<I, keyof OM & string, NodeData, InferOutputValueMap<OM>> {
     const inputMap = config?.inputs ?? ({} as Record<I, string | string[]>);
-    const outputMap = config?.outputs ?? ({} as Record<O, string>);
+    const outputMap = config?.outputs ?? ({} as OM);
     const inputKeys = Object.keys(inputMap) as I[];
-    const outputKeys = Object.keys(outputMap) as O[];
-    let builder = new PromptBuilder<I, O, NodeData>(this.workflow, inputKeys, outputKeys);
+    const outputKeys = Object.keys(outputMap) as Array<keyof OM & string>;
+    let builder = new PromptBuilder<I, keyof OM & string, NodeData, InferOutputValueMap<OM>>(
+      this.workflow,
+      inputKeys,
+      outputKeys
+    );
 
     for (const key of inputKeys) {
       builder = builder.setRawInputNode(key, inputMap[key]);
     }
     for (const key of outputKeys) {
-      builder = builder.setRawOutputNode(key, outputMap[key]);
+      builder = builder.setRawOutputNode(key, outputMap[key] as string);
     }
 
     return builder;
